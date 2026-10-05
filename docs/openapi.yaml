@@ -1,0 +1,2254 @@
+openapi: 3.0.3
+info:
+  title: PetFinder API
+  version: 1.0.0
+  description: |
+    API para descoberta e adoção segura de animais com mediação obrigatória de
+    uma organização verificada. Adotante e anunciante possuem conversas
+    separadas com a organização; não existe conversa privada entre eles.
+  contact:
+    name: PetFinder
+license:
+  name: MIT
+  url: https://opensource.org/license/mit
+servers:
+  - url: http://localhost:8080
+    description: Ambiente local
+tags:
+  - name: System
+  - name: Authentication
+  - name: Profile
+  - name: Organizations
+  - name: Animals
+  - name: Preferences
+  - name: Applications
+  - name: Conversations
+  - name: Appointments
+  - name: Reports
+security:
+  - bearerAuth: []
+paths:
+  /health:
+    get:
+      tags: [System]
+      summary: Verifica a saúde da API
+      operationId: healthCheck
+      security: []
+      responses:
+        "200":
+          description: API e dependências essenciais estão disponíveis
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Health"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /v1/auth/register:
+    post:
+      tags: [Authentication]
+      summary: Cria uma conta
+      operationId: register
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+      responses:
+        "201":
+          description: Conta criada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthSession"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /v1/auth/login:
+    post:
+      tags: [Authentication]
+      summary: Autentica uma conta
+      operationId: login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Sessão criada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthSession"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /v1/auth/refresh:
+    post:
+      tags: [Authentication]
+      summary: Renova a sessão com rotação do refresh token
+      operationId: refreshSession
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefreshRequest"
+      responses:
+        "200":
+          description: Sessão renovada e token anterior revogado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthSession"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/auth/logout:
+    post:
+      tags: [Authentication]
+      summary: Revoga uma sessão
+      operationId: logout
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefreshRequest"
+      responses:
+        "204":
+          description: Sessão revogada
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/me:
+    get:
+      tags: [Profile]
+      summary: Consulta o perfil autenticado
+      operationId: getProfile
+      responses:
+        "200":
+          description: Perfil
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    patch:
+      tags: [Profile]
+      summary: Atualiza o perfil autenticado
+      operationId: updateProfile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProfileRequest"
+      responses:
+        "200":
+          description: Perfil atualizado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /v1/organizations:
+    get:
+      tags: [Organizations]
+      summary: Lista organizações públicas
+      operationId: listOrganizations
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+        - name: verified
+          in: query
+          schema:
+            type: boolean
+        - $ref: "#/components/parameters/NearLatitude"
+        - $ref: "#/components/parameters/NearLongitude"
+      responses:
+        "200":
+          description: Página de organizações
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrganizationPage"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+    post:
+      tags: [Organizations]
+      summary: Solicita o cadastro de uma organização
+      operationId: createOrganization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateOrganizationRequest"
+      responses:
+        "201":
+          description: Organização criada com verificação pendente
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Organization"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /v1/organizations/{organizationId}:
+    parameters:
+      - $ref: "#/components/parameters/OrganizationId"
+    get:
+      tags: [Organizations]
+      summary: Consulta o perfil público de uma organização
+      operationId: getOrganization
+      security: []
+      responses:
+        "200":
+          description: Organização
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Organization"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Organizations]
+      summary: Atualiza uma organização
+      description: Exige vínculo de administrador da organização.
+      operationId: updateOrganization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateOrganizationRequest"
+      responses:
+        "200":
+          description: Organização atualizada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Organization"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/organizations/{organizationId}/verification:
+    parameters:
+      - $ref: "#/components/parameters/OrganizationId"
+    post:
+      tags: [Organizations]
+      summary: Registra a decisão de verificação
+      description: Operação exclusiva de administradores da plataforma.
+      operationId: decideOrganizationVerification
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrganizationVerificationRequest"
+      responses:
+        "200":
+          description: Verificação registrada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Organization"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /v1/organizations/{organizationId}/members:
+    parameters:
+      - $ref: "#/components/parameters/OrganizationId"
+    get:
+      tags: [Organizations]
+      summary: Lista representantes autorizados
+      operationId: listOrganizationMembers
+      responses:
+        "200":
+          description: Representantes
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/OrganizationMember"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      tags: [Organizations]
+      summary: Adiciona um representante
+      operationId: addOrganizationMember
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddOrganizationMemberRequest"
+      responses:
+        "201":
+          description: Representante adicionado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrganizationMember"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /v1/organizations/{organizationId}/members/{userId}:
+    delete:
+      tags: [Organizations]
+      summary: Remove um representante
+      operationId: removeOrganizationMember
+      parameters:
+        - $ref: "#/components/parameters/OrganizationId"
+        - $ref: "#/components/parameters/UserId"
+      responses:
+        "204":
+          description: Representante removido
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /v1/animals:
+    get:
+      tags: [Animals]
+      summary: Descobre animais disponíveis
+      operationId: listAnimals
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+        - name: species
+          in: query
+          schema:
+            $ref: "#/components/schemas/AnimalSpecies"
+        - name: size
+          in: query
+          schema:
+            $ref: "#/components/schemas/AnimalSize"
+        - name: organization_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - $ref: "#/components/parameters/NearLatitude"
+        - $ref: "#/components/parameters/NearLongitude"
+        - name: radius_km
+          in: query
+          schema:
+            type: number
+            format: double
+            minimum: 1
+            maximum: 500
+            default: 50
+      responses:
+        "200":
+          description: Página de animais
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnimalPage"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+    post:
+      tags: [Animals]
+      summary: Cadastra um animal
+      description: |
+        Cadastros de pessoas físicas nascem como `pending_organization`.
+        Organizações verificadas podem cadastrar sob sua responsabilidade.
+      operationId: createAnimal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAnimalRequest"
+      responses:
+        "201":
+          description: Animal cadastrado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Animal"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /v1/animals/{animalId}:
+    parameters:
+      - $ref: "#/components/parameters/AnimalId"
+    get:
+      tags: [Animals]
+      summary: Consulta um animal
+      operationId: getAnimal
+      security: []
+      responses:
+        "200":
+          description: Animal e organização responsável
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Animal"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Animals]
+      summary: Atualiza os dados de um animal
+      operationId: updateAnimal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateAnimalRequest"
+      responses:
+        "200":
+          description: Animal atualizado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Animal"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/animals/{animalId}/status:
+    patch:
+      tags: [Animals]
+      summary: Altera o estado de um animal
+      description: Valida as transições e as permissões da organização responsável.
+      operationId: updateAnimalStatus
+      parameters:
+        - $ref: "#/components/parameters/AnimalId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateAnimalStatusRequest"
+      responses:
+        "200":
+          description: Estado alterado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Animal"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /v1/animals/{animalId}/images:
+    post:
+      tags: [Animals]
+      summary: Adiciona uma imagem à galeria
+      operationId: addAnimalImage
+      parameters:
+        - $ref: "#/components/parameters/AnimalId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddAnimalImageRequest"
+      responses:
+        "201":
+          description: Imagem adicionada e pendente de moderação quando aplicável
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnimalImage"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/animals/{animalId}/images/{imageId}:
+    delete:
+      tags: [Animals]
+      summary: Remove uma imagem da galeria
+      operationId: removeAnimalImage
+      parameters:
+        - $ref: "#/components/parameters/AnimalId"
+        - $ref: "#/components/parameters/ImageId"
+      responses:
+        "204":
+          description: Imagem removida
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/preferences:
+    get:
+      tags: [Preferences]
+      summary: Lista preferências do usuário
+      operationId: listPreferences
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+        - name: value
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/PreferenceValue"
+      responses:
+        "200":
+          description: Página de preferências
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PreferencePage"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/animals/{animalId}/preference:
+    put:
+      tags: [Preferences]
+      summary: Registra ou substitui uma preferência
+      operationId: setAnimalPreference
+      parameters:
+        - $ref: "#/components/parameters/AnimalId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetPreferenceRequest"
+      responses:
+        "200":
+          description: Preferência registrada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Preference"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/applications:
+    get:
+      tags: [Applications]
+      summary: Lista solicitações acessíveis ao usuário
+      operationId: listApplications
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/ApplicationStatus"
+        - name: animal_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Página de solicitações
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApplicationPage"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Applications]
+      summary: Envia uma solicitação de adoção
+      description: A solicitação é destinada exclusivamente à organização responsável.
+      operationId: createApplication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateApplicationRequest"
+      responses:
+        "201":
+          description: Solicitação enviada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdoptionApplication"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /v1/applications/{applicationId}:
+    get:
+      tags: [Applications]
+      summary: Consulta uma solicitação
+      operationId: getApplication
+      parameters:
+        - $ref: "#/components/parameters/ApplicationId"
+      responses:
+        "200":
+          description: Solicitação e histórico de decisão
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdoptionApplication"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/applications/{applicationId}/screening:
+    put:
+      tags: [Applications]
+      summary: Responde ou atualiza a triagem
+      operationId: submitScreening
+      parameters:
+        - $ref: "#/components/parameters/ApplicationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScreeningRequest"
+      responses:
+        "200":
+          description: Triagem salva
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdoptionApplication"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /v1/applications/{applicationId}/decision:
+    post:
+      tags: [Applications]
+      summary: Registra a decisão da organização
+      operationId: decideApplication
+      parameters:
+        - $ref: "#/components/parameters/ApplicationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApplicationDecisionRequest"
+      responses:
+        "200":
+          description: Decisão registrada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdoptionApplication"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /v1/conversations:
+    get:
+      tags: [Conversations]
+      summary: Lista conversas mediadas acessíveis ao usuário
+      description: |
+        Cada conversa conecta uma organização a um adotante ou a um anunciante.
+        A API nunca cria uma conversa direta entre adotante e anunciante.
+      operationId: listConversations
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: Página de conversas
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConversationPage"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/conversations/{conversationId}/messages:
+    parameters:
+      - $ref: "#/components/parameters/ConversationId"
+    get:
+      tags: [Conversations]
+      summary: Lista mensagens de uma conversa
+      operationId: listMessages
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: Página de mensagens em ordem cronológica
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessagePage"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags: [Conversations]
+      summary: Envia uma mensagem
+      description: Pedidos de pagamento e dados de contato externo podem ser bloqueados e denunciados.
+      operationId: sendMessage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendMessageRequest"
+      responses:
+        "201":
+          description: Mensagem enviada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Message"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/PolicyViolation"
+
+  /v1/applications/{applicationId}/appointments:
+    post:
+      tags: [Appointments]
+      summary: Agenda um encontro
+      description: Operação da organização após a aprovação da solicitação.
+      operationId: createAppointment
+      parameters:
+        - $ref: "#/components/parameters/ApplicationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAppointmentRequest"
+      responses:
+        "201":
+          description: Encontro agendado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Appointment"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /v1/appointments/{appointmentId}:
+    patch:
+      tags: [Appointments]
+      summary: Reagenda ou cancela um encontro
+      operationId: updateAppointment
+      parameters:
+        - $ref: "#/components/parameters/AppointmentId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateAppointmentRequest"
+      responses:
+        "200":
+          description: Encontro atualizado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Appointment"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /v1/appointments/{appointmentId}/otp:
+    post:
+      tags: [Appointments]
+      summary: Emite um OTP para confirmação da entrega
+      description: O código é de uso único, possui expiração curta e nunca é armazenado em texto simples.
+      operationId: issueAppointmentOtp
+      parameters:
+        - $ref: "#/components/parameters/AppointmentId"
+      responses:
+        "201":
+          description: OTP emitido ao usuário autorizado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IssuedOtp"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /v1/appointments/{appointmentId}/confirmations:
+    post:
+      tags: [Appointments]
+      summary: Confirma entrega ou recebimento
+      description: |
+        A identidade autenticada determina a parte que confirma. A confirmação
+        de recebimento exige o OTP. A adoção só é concluída após entrega e
+        recebimento confirmados e validação do OTP.
+      operationId: confirmAppointment
+      parameters:
+        - $ref: "#/components/parameters/AppointmentId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AppointmentConfirmationRequest"
+      responses:
+        "200":
+          description: Confirmação registrada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Appointment"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /v1/reports:
+    get:
+      tags: [Reports]
+      summary: Lista denúncias acessíveis à moderação
+      operationId: listReports
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/ReportStatus"
+      responses:
+        "200":
+          description: Página de denúncias
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportPage"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      tags: [Reports]
+      summary: Registra uma denúncia
+      operationId: createReport
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateReportRequest"
+      responses:
+        "201":
+          description: Denúncia registrada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Report"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/reports/{reportId}:
+    get:
+      tags: [Reports]
+      summary: Consulta uma denúncia
+      operationId: getReport
+      parameters:
+        - $ref: "#/components/parameters/ReportId"
+      responses:
+        "200":
+          description: Denúncia
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Report"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Reports]
+      summary: Atualiza a análise de uma denúncia
+      operationId: updateReport
+      parameters:
+        - $ref: "#/components/parameters/ReportId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateReportRequest"
+      responses:
+        "200":
+          description: Denúncia atualizada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Report"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: "Access token enviado como `Authorization: Bearer <token>`."
+
+  parameters:
+    Page:
+      name: page
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    PageSize:
+      name: page_size
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    NearLatitude:
+      name: latitude
+      in: query
+      schema:
+        type: number
+        format: double
+        minimum: -90
+        maximum: 90
+    NearLongitude:
+      name: longitude
+      in: query
+      schema:
+        type: number
+        format: double
+        minimum: -180
+        maximum: 180
+    OrganizationId:
+      name: organizationId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    UserId:
+      name: userId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    AnimalId:
+      name: animalId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    ImageId:
+      name: imageId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    ApplicationId:
+      name: applicationId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    ConversationId:
+      name: conversationId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    AppointmentId:
+      name: appointmentId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    ReportId:
+      name: reportId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  responses:
+    ValidationError:
+      description: Requisição inválida
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            type: https://petfinder.local/problems/Bad-Request
+            title: Invalid request
+            status: 400
+            detail: um ou mais campos são inválidos
+            errors:
+              email: deve ser um endereço válido
+    Unauthorized:
+      description: Credenciais ausentes, inválidas ou expiradas
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Forbidden:
+      description: Usuário autenticado sem permissão para o recurso
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    NotFound:
+      description: Recurso não encontrado
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Conflict:
+      description: Conflito com o estado atual do recurso
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    PolicyViolation:
+      description: Conteúdo bloqueado pela política de segurança
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            type: https://petfinder.local/problems/Unprocessable-Entity
+            title: Unsafe message
+            status: 422
+            detail: a mensagem contém conteúdo não permitido no fluxo de adoção
+    TooManyRequests:
+      description: Limite de tentativas excedido
+      headers:
+        Retry-After:
+          description: Segundos até uma nova tentativa.
+          schema:
+            type: integer
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    ServiceUnavailable:
+      description: Serviço temporariamente indisponível
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+  schemas:
+    Health:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+
+    ErrorResponse:
+      type: object
+      required: [type, title, status]
+      properties:
+        type:
+          type: string
+          format: uri
+          description: Identificador estável do tipo de problema.
+          example: https://petfinder.local/problems/Bad-Request
+        title:
+          type: string
+          example: Invalid request
+        status:
+          type: integer
+          example: 400
+        detail:
+          type: string
+        errors:
+          type: object
+          description: Erros indexados pelo nome do campo, quando aplicável.
+          additionalProperties:
+            type: string
+
+    PageInfo:
+      type: object
+      required: [page, page_size, total]
+      properties:
+        page:
+          type: integer
+          minimum: 1
+        page_size:
+          type: integer
+          minimum: 1
+          maximum: 100
+        total:
+          type: integer
+          minimum: 0
+
+    RegisterRequest:
+      type: object
+      required: [name, email, password, accepted_terms, accepted_privacy_policy]
+      properties:
+        name:
+          type: string
+          minLength: 2
+          maxLength: 120
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        password:
+          type: string
+          format: password
+          minLength: 12
+          maxLength: 72
+        accepted_terms:
+          type: boolean
+          enum: [true]
+        accepted_privacy_policy:
+          type: boolean
+          enum: [true]
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        password:
+          type: string
+          format: password
+          minLength: 1
+          maxLength: 72
+
+    RefreshRequest:
+      type: object
+      required: [refresh_token]
+      properties:
+        refresh_token:
+          type: string
+          minLength: 32
+          writeOnly: true
+
+    AuthSession:
+      type: object
+      required: [access_token, refresh_token, token_type, expires_in, user]
+      properties:
+        access_token:
+          type: string
+        refresh_token:
+          type: string
+        token_type:
+          type: string
+          enum: [Bearer]
+        expires_in:
+          type: integer
+          description: Validade do access token em segundos.
+          example: 900
+        user:
+          $ref: "#/components/schemas/User"
+
+    UserRole:
+      type: string
+      enum: [adopter, advertiser, organization_member, platform_admin]
+
+    User:
+      type: object
+      required: [id, name, email, roles, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        phone:
+          type: string
+          nullable: true
+        roles:
+          type: array
+          uniqueItems: true
+          items:
+            $ref: "#/components/schemas/UserRole"
+        location:
+          allOf:
+            - $ref: "#/components/schemas/Location"
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    UpdateProfileRequest:
+      type: object
+      minProperties: 1
+      properties:
+        name:
+          type: string
+          minLength: 2
+          maxLength: 120
+        phone:
+          type: string
+          minLength: 8
+          maxLength: 30
+          nullable: true
+        location:
+          allOf:
+            - $ref: "#/components/schemas/LocationInput"
+          nullable: true
+
+    LocationInput:
+      type: object
+      required: [city, state, country_code]
+      properties:
+        city:
+          type: string
+          minLength: 2
+          maxLength: 100
+        state:
+          type: string
+          minLength: 2
+          maxLength: 100
+        country_code:
+          type: string
+          pattern: "^[A-Z]{2}$"
+          example: BR
+        latitude:
+          type: number
+          format: double
+          minimum: -90
+          maximum: 90
+        longitude:
+          type: number
+          format: double
+          minimum: -180
+          maximum: 180
+
+    Location:
+      allOf:
+        - $ref: "#/components/schemas/LocationInput"
+        - type: object
+          properties:
+            distance_km:
+              type: number
+              format: double
+              readOnly: true
+
+    OrganizationVerificationStatus:
+      type: string
+      enum: [pending, verified, rejected, suspended]
+
+    Organization:
+      type: object
+      required: [id, name, description, verification_status, official_channels, location, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        legal_name:
+          type: string
+          nullable: true
+        registration_number:
+          type: string
+          nullable: true
+          description: Visível somente para usuários autorizados.
+        description:
+          type: string
+        verification_status:
+          $ref: "#/components/schemas/OrganizationVerificationStatus"
+        verified_at:
+          type: string
+          format: date-time
+          nullable: true
+        official_channels:
+          type: object
+          properties:
+            website:
+              type: string
+              format: uri
+              nullable: true
+            email:
+              type: string
+              format: email
+              nullable: true
+            phone:
+              type: string
+              nullable: true
+        location:
+          $ref: "#/components/schemas/Location"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateOrganizationRequest:
+      type: object
+      required: [name, legal_name, registration_number, description, official_channels, location]
+      properties:
+        name:
+          type: string
+          minLength: 2
+          maxLength: 160
+        legal_name:
+          type: string
+          minLength: 2
+          maxLength: 200
+        registration_number:
+          type: string
+          minLength: 8
+          maxLength: 32
+        description:
+          type: string
+          minLength: 20
+          maxLength: 2000
+        official_channels:
+          type: object
+          minProperties: 1
+          properties:
+            website:
+              type: string
+              format: uri
+            email:
+              type: string
+              format: email
+            phone:
+              type: string
+              minLength: 8
+              maxLength: 30
+        location:
+          $ref: "#/components/schemas/LocationInput"
+
+    UpdateOrganizationRequest:
+      type: object
+      minProperties: 1
+      properties:
+        name:
+          type: string
+          minLength: 2
+          maxLength: 160
+        description:
+          type: string
+          minLength: 20
+          maxLength: 2000
+        official_channels:
+          type: object
+          minProperties: 1
+          properties:
+            website:
+              type: string
+              format: uri
+            email:
+              type: string
+              format: email
+            phone:
+              type: string
+              minLength: 8
+              maxLength: 30
+        location:
+          $ref: "#/components/schemas/LocationInput"
+
+    OrganizationVerificationRequest:
+      type: object
+      required: [decision]
+      properties:
+        decision:
+          type: string
+          enum: [verified, rejected, suspended]
+        reason:
+          type: string
+          minLength: 10
+          maxLength: 1000
+
+    OrganizationMember:
+      type: object
+      required: [user_id, organization_id, role, created_at]
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        organization_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        role:
+          type: string
+          enum: [owner, coordinator, representative, moderator]
+        created_at:
+          type: string
+          format: date-time
+
+    AddOrganizationMemberRequest:
+      type: object
+      required: [email, role]
+      properties:
+        email:
+          type: string
+          format: email
+        role:
+          type: string
+          enum: [coordinator, representative, moderator]
+
+    OrganizationPage:
+      type: object
+      required: [items, page]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Organization"
+        page:
+          $ref: "#/components/schemas/PageInfo"
+
+    AnimalSpecies:
+      type: string
+      enum: [dog, cat, other]
+
+    AnimalSize:
+      type: string
+      enum: [small, medium, large, extra_large]
+
+    AnimalSex:
+      type: string
+      enum: [female, male, unknown]
+
+    AnimalStatus:
+      type: string
+      description: Estado controlado pela organização responsável.
+      enum:
+        - pending_organization
+        - available
+        - adoption_in_progress
+        - adopted
+        - unavailable
+        - under_review
+
+    AnimalImage:
+      type: object
+      required: [id, url, position, moderation_status, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        url:
+          type: string
+          format: uri
+        alt_text:
+          type: string
+          nullable: true
+        position:
+          type: integer
+          minimum: 0
+        moderation_status:
+          type: string
+          enum: [pending, approved, rejected]
+        created_at:
+          type: string
+          format: date-time
+
+    AddAnimalImageRequest:
+      type: object
+      required: [url]
+      properties:
+        url:
+          type: string
+          format: uri
+          maxLength: 2048
+          description: URL absoluta HTTP ou HTTPS de uma imagem já hospedada.
+        alt_text:
+          type: string
+          minLength: 1
+          maxLength: 200
+        position:
+          type: integer
+          minimum: 0
+          maximum: 100
+          default: 0
+
+    Animal:
+      type: object
+      required: [id, advertiser_id, name, species, size, sex, description, health_notes, behavior_notes, location, status, images, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        advertiser_id:
+          type: string
+          format: uuid
+        organization:
+          allOf:
+            - $ref: "#/components/schemas/Organization"
+          nullable: true
+        name:
+          type: string
+        species:
+          $ref: "#/components/schemas/AnimalSpecies"
+        breed:
+          type: string
+          nullable: true
+        size:
+          $ref: "#/components/schemas/AnimalSize"
+        sex:
+          $ref: "#/components/schemas/AnimalSex"
+        approximate_birth_date:
+          type: string
+          format: date
+          nullable: true
+        description:
+          type: string
+        health_notes:
+          type: string
+        behavior_notes:
+          type: string
+        location:
+          $ref: "#/components/schemas/Location"
+        status:
+          $ref: "#/components/schemas/AnimalStatus"
+        images:
+          type: array
+          items:
+            $ref: "#/components/schemas/AnimalImage"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateAnimalRequest:
+      type: object
+      required: [name, species, size, sex, description, health_notes, behavior_notes, location]
+      properties:
+        organization_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: Obrigatório para publicação direta por uma organização.
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        species:
+          $ref: "#/components/schemas/AnimalSpecies"
+        breed:
+          type: string
+          maxLength: 100
+          nullable: true
+        size:
+          $ref: "#/components/schemas/AnimalSize"
+        sex:
+          $ref: "#/components/schemas/AnimalSex"
+        approximate_birth_date:
+          type: string
+          format: date
+          nullable: true
+        description:
+          type: string
+          minLength: 20
+          maxLength: 5000
+        health_notes:
+          type: string
+          maxLength: 3000
+        behavior_notes:
+          type: string
+          maxLength: 3000
+        location:
+          $ref: "#/components/schemas/LocationInput"
+
+    UpdateAnimalRequest:
+      type: object
+      minProperties: 1
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        breed:
+          type: string
+          maxLength: 100
+          nullable: true
+        size:
+          $ref: "#/components/schemas/AnimalSize"
+        sex:
+          $ref: "#/components/schemas/AnimalSex"
+        approximate_birth_date:
+          type: string
+          format: date
+          nullable: true
+        description:
+          type: string
+          minLength: 20
+          maxLength: 5000
+        health_notes:
+          type: string
+          maxLength: 3000
+        behavior_notes:
+          type: string
+          maxLength: 3000
+        location:
+          $ref: "#/components/schemas/LocationInput"
+
+    UpdateAnimalStatusRequest:
+      type: object
+      required: [status, reason]
+      properties:
+        status:
+          $ref: "#/components/schemas/AnimalStatus"
+        reason:
+          type: string
+          minLength: 5
+          maxLength: 1000
+
+    AnimalPage:
+      type: object
+      required: [items, page]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Animal"
+        page:
+          $ref: "#/components/schemas/PageInfo"
+
+    PreferenceValue:
+      type: string
+      enum: [liked, not_interested]
+
+    SetPreferenceRequest:
+      type: object
+      required: [value]
+      properties:
+        value:
+          $ref: "#/components/schemas/PreferenceValue"
+
+    Preference:
+      type: object
+      required: [animal, value, created_at, updated_at]
+      properties:
+        animal:
+          $ref: "#/components/schemas/Animal"
+        value:
+          $ref: "#/components/schemas/PreferenceValue"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    PreferencePage:
+      type: object
+      required: [items, page]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Preference"
+        page:
+          $ref: "#/components/schemas/PageInfo"
+
+    ApplicationStatus:
+      type: string
+      enum: [submitted, screening, more_information_requested, approved, rejected, withdrawn, completed, cancelled]
+
+    CreateApplicationRequest:
+      type: object
+      required: [animal_id, introduction]
+      properties:
+        animal_id:
+          type: string
+          format: uuid
+        introduction:
+          type: string
+          minLength: 20
+          maxLength: 3000
+
+    ScreeningRequest:
+      type: object
+      required: [housing, household, experience, care_plan]
+      properties:
+        housing:
+          type: string
+          minLength: 1
+          maxLength: 1000
+        household:
+          type: string
+          minLength: 1
+          maxLength: 1000
+        experience:
+          type: string
+          minLength: 1
+          maxLength: 2000
+        care_plan:
+          type: string
+          minLength: 20
+          maxLength: 3000
+        has_other_animals:
+          type: boolean
+        accepts_follow_up:
+          type: boolean
+
+    ApplicationDecisionRequest:
+      type: object
+      required: [decision, reason]
+      properties:
+        decision:
+          type: string
+          enum: [approved, rejected, needs_information]
+        reason:
+          type: string
+          minLength: 5
+          maxLength: 2000
+
+    ApplicationDecision:
+      type: object
+      required: [decision, reason, decided_by, decided_at]
+      properties:
+        decision:
+          type: string
+          enum: [approved, rejected, needs_information]
+        reason:
+          type: string
+        decided_by:
+          type: string
+          format: uuid
+        decided_at:
+          type: string
+          format: date-time
+
+    AdoptionApplication:
+      type: object
+      required: [id, animal, adopter_id, organization_id, introduction, status, decisions, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        animal:
+          $ref: "#/components/schemas/Animal"
+        adopter_id:
+          type: string
+          format: uuid
+        organization_id:
+          type: string
+          format: uuid
+        introduction:
+          type: string
+        status:
+          $ref: "#/components/schemas/ApplicationStatus"
+        screening:
+          allOf:
+            - $ref: "#/components/schemas/ScreeningRequest"
+          nullable: true
+        decisions:
+          type: array
+          items:
+            $ref: "#/components/schemas/ApplicationDecision"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    ApplicationPage:
+      type: object
+      required: [items, page]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdoptionApplication"
+        page:
+          $ref: "#/components/schemas/PageInfo"
+
+    Conversation:
+      type: object
+      required: [id, organization_id, participant_id, participant_role, animal_id, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        organization_id:
+          type: string
+          format: uuid
+        participant_id:
+          type: string
+          format: uuid
+        participant_role:
+          type: string
+          description: O participante externo à organização; nunca há dois participantes externos.
+          enum: [adopter, advertiser]
+        animal_id:
+          type: string
+          format: uuid
+        application_id:
+          type: string
+          format: uuid
+          nullable: true
+        last_message:
+          allOf:
+            - $ref: "#/components/schemas/Message"
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    SendMessageRequest:
+      type: object
+      required: [body]
+      properties:
+        body:
+          type: string
+          minLength: 1
+          maxLength: 5000
+
+    Message:
+      type: object
+      required: [id, conversation_id, sender_id, body, moderation_status, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        conversation_id:
+          type: string
+          format: uuid
+        sender_id:
+          type: string
+          format: uuid
+        body:
+          type: string
+        moderation_status:
+          type: string
+          enum: [visible, flagged, hidden, removed]
+        created_at:
+          type: string
+          format: date-time
+
+    ConversationPage:
+      type: object
+      required: [items, page]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Conversation"
+        page:
+          $ref: "#/components/schemas/PageInfo"
+
+    MessagePage:
+      type: object
+      required: [items, page]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Message"
+        page:
+          $ref: "#/components/schemas/PageInfo"
+
+    AppointmentStatus:
+      type: string
+      enum: [proposed, scheduled, completed, cancelled, no_show]
+
+    CreateAppointmentRequest:
+      type: object
+      required: [purpose, starts_at, ends_at, timezone, location_name, address]
+      properties:
+        purpose:
+          type: string
+          enum: [interview, home_visit, meet_and_greet, delivery, follow_up]
+        starts_at:
+          type: string
+          format: date-time
+        ends_at:
+          type: string
+          format: date-time
+        timezone:
+          type: string
+          example: America/Recife
+        location_name:
+          type: string
+          minLength: 2
+          maxLength: 200
+        address:
+          type: string
+          minLength: 5
+          maxLength: 500
+        instructions:
+          type: string
+          maxLength: 2000
+
+    UpdateAppointmentRequest:
+      type: object
+      minProperties: 1
+      properties:
+        starts_at:
+          type: string
+          format: date-time
+        ends_at:
+          type: string
+          format: date-time
+        timezone:
+          type: string
+        location_name:
+          type: string
+          minLength: 2
+          maxLength: 200
+        address:
+          type: string
+          minLength: 5
+          maxLength: 500
+        instructions:
+          type: string
+          maxLength: 2000
+        status:
+          type: string
+          enum: [scheduled, cancelled, no_show]
+        reason:
+          type: string
+          minLength: 5
+          maxLength: 1000
+
+    AppointmentConfirmationRequest:
+      type: object
+      required: [type]
+      properties:
+        type:
+          type: string
+          enum: [delivery, receipt]
+        otp_code:
+          type: string
+          pattern: "^[0-9]{6}$"
+          writeOnly: true
+          description: Obrigatório para a confirmação de recebimento.
+
+    AppointmentConfirmation:
+      type: object
+      required: [type, confirmed_by, confirmed_at]
+      properties:
+        type:
+          type: string
+          enum: [delivery, receipt]
+        confirmed_by:
+          type: string
+          format: uuid
+        confirmed_at:
+          type: string
+          format: date-time
+        otp_validated:
+          type: boolean
+
+    Appointment:
+      type: object
+      required: [id, application_id, purpose, starts_at, ends_at, timezone, location_name, address, status, confirmations, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        application_id:
+          type: string
+          format: uuid
+        purpose:
+          type: string
+          enum: [interview, home_visit, meet_and_greet, delivery, follow_up]
+        starts_at:
+          type: string
+          format: date-time
+        ends_at:
+          type: string
+          format: date-time
+        timezone:
+          type: string
+        location_name:
+          type: string
+        address:
+          type: string
+        instructions:
+          type: string
+          nullable: true
+        status:
+          $ref: "#/components/schemas/AppointmentStatus"
+        confirmations:
+          type: array
+          items:
+            $ref: "#/components/schemas/AppointmentConfirmation"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    IssuedOtp:
+      type: object
+      required: [code, expires_at]
+      properties:
+        code:
+          type: string
+          pattern: "^[0-9]{6}$"
+          description: Exibido uma única vez ao usuário autorizado.
+        expires_at:
+          type: string
+          format: date-time
+
+    ReportCategory:
+      type: string
+      enum: [payment_request, fraud, harassment, inappropriate_content, off_platform_contact, animal_welfare, other]
+
+    ReportStatus:
+      type: string
+      enum: [open, triaged, investigating, resolved, dismissed]
+
+    CreateReportRequest:
+      type: object
+      required: [category, description, subject_type, subject_id]
+      properties:
+        category:
+          $ref: "#/components/schemas/ReportCategory"
+        description:
+          type: string
+          minLength: 10
+          maxLength: 5000
+        subject_type:
+          type: string
+          enum: [animal, organization, conversation, message, application]
+        subject_id:
+          type: string
+          format: uuid
+
+    UpdateReportRequest:
+      type: object
+      required: [status, resolution]
+      properties:
+        status:
+          type: string
+          enum: [investigating, resolved, dismissed]
+        resolution:
+          type: string
+          minLength: 5
+          maxLength: 3000
+
+    Report:
+      type: object
+      required: [id, reporter_id, category, description, subject_type, subject_id, status, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        reporter_id:
+          type: string
+          format: uuid
+        category:
+          $ref: "#/components/schemas/ReportCategory"
+        description:
+          type: string
+        subject_type:
+          type: string
+          enum: [animal, organization, conversation, message, application]
+        subject_id:
+          type: string
+          format: uuid
+        status:
+          $ref: "#/components/schemas/ReportStatus"
+        resolution:
+          type: string
+          nullable: true
+        resolved_by:
+          type: string
+          format: uuid
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    ReportPage:
+      type: object
+      required: [items, page]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Report"
+        page:
+          $ref: "#/components/schemas/PageInfo"
