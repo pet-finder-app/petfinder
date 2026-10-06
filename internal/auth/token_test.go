@@ -37,7 +37,7 @@ func TestTokenManagerIssueAndParse(t *testing.T) {
 	if !containsAudience(claims.Audience, DefaultAudience) {
 		t.Errorf("Audience = %v, want %q", claims.Audience, DefaultAudience)
 	}
-	if claims.ExpiresAt == nil || !claims.ExpiresAt.Time.Equal(now.Add(DefaultAccessTTL)) {
+	if claims.ExpiresAt == nil || !claims.ExpiresAt.Equal(now.Add(DefaultAccessTTL)) {
 		t.Errorf("ExpiresAt = %v, want %v", claims.ExpiresAt, now.Add(DefaultAccessTTL))
 	}
 	if claims.ID == "" {

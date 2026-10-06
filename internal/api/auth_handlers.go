@@ -42,7 +42,7 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 		writeServiceError(w, err)
 		return
 	}
-	defer tx.Rollback(r.Context())
+	defer rollbackTransaction(r.Context(), tx)
 	q := database.New(tx)
 	now := pgtype.Timestamptz{Time: time.Now().UTC(), Valid: true}
 	user, err := q.CreateUser(r.Context(), database.CreateUserParams{
@@ -125,7 +125,7 @@ func (s *Server) refresh(w http.ResponseWriter, r *http.Request) {
 		writeServiceError(w, err)
 		return
 	}
-	defer tx.Rollback(r.Context())
+	defer rollbackTransaction(r.Context(), tx)
 	q := database.New(tx)
 	session, err := q.GetActiveRefreshSessionByTokenHash(r.Context(), hash[:])
 	if err != nil {

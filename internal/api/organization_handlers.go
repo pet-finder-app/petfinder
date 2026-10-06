@@ -71,7 +71,7 @@ func (s *Server) createOrganization(w http.ResponseWriter, r *http.Request) {
 		writeServiceError(w, err)
 		return
 	}
-	defer tx.Rollback(r.Context())
+	defer rollbackTransaction(r.Context(), tx)
 	q := database.New(tx)
 	registration := request.RegistrationNumber
 	org, err := q.CreateOrganization(r.Context(), database.CreateOrganizationParams{

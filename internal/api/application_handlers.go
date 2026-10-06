@@ -72,7 +72,7 @@ func (s *Server) createApplication(w http.ResponseWriter, r *http.Request) {
 		writeServiceError(w, err)
 		return
 	}
-	defer tx.Rollback(r.Context())
+	defer rollbackTransaction(r.Context(), tx)
 	q := database.New(tx)
 	application, err := q.CreateAdoptionApplication(r.Context(), database.CreateAdoptionApplicationParams{AdopterID: actor, ApplicantMessage: request.Introduction, AnimalID: animalID})
 	if err != nil {
@@ -175,7 +175,7 @@ func (s *Server) submitScreening(w http.ResponseWriter, r *http.Request) {
 		writeServiceError(w, err)
 		return
 	}
-	defer tx.Rollback(r.Context())
+	defer rollbackTransaction(r.Context(), tx)
 	q := database.New(tx)
 	screening, err := q.GetLatestApplicationScreening(r.Context(), id)
 	if err == pgx.ErrNoRows {
@@ -247,7 +247,7 @@ func (s *Server) decideApplication(w http.ResponseWriter, r *http.Request) {
 		writeServiceError(w, err)
 		return
 	}
-	defer tx.Rollback(r.Context())
+	defer rollbackTransaction(r.Context(), tx)
 	q := database.New(tx)
 	updated, err := q.SetApplicationStatus(r.Context(), database.SetApplicationStatusParams{Status: to, Reason: &reason, ActorID: actor, ID: id, OrganizationID: application.OrganizationID})
 	if err != nil {

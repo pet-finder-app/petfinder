@@ -190,7 +190,7 @@ func (s *Server) issueAppointmentOTP(w http.ResponseWriter, r *http.Request) {
 		writeServiceError(w, err)
 		return
 	}
-	defer tx.Rollback(r.Context())
+	defer rollbackTransaction(r.Context(), tx)
 	q := database.New(tx)
 	if _, err = q.RevokeAppointmentOTP(r.Context(), id); err != nil {
 		handleDBError(w, err)
@@ -228,7 +228,7 @@ func (s *Server) confirmAppointment(w http.ResponseWriter, r *http.Request) {
 		writeServiceError(w, err)
 		return
 	}
-	defer tx.Rollback(r.Context())
+	defer rollbackTransaction(r.Context(), tx)
 	q := database.New(tx)
 	appointment, err := q.GetAppointmentByID(r.Context(), id)
 	if err != nil {
