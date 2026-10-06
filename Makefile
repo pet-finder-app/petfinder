@@ -5,7 +5,7 @@ MIGRATIONS_DIR ?= db/migrations
 
 .DEFAULT_GOAL := help
 
-.PHONY: help run build test test-race lint generate fmt check migrate-up migrate-down migrate-create docker-up docker-down docker-logs docs-validate
+.PHONY: help run build test test-race lint generate fmt check migrate-up migrate-down migrate-create docker-up docker-down docker-logs docs-generate docs-check docs-validate
 
 help: ## Lista os comandos disponíveis
 	@awk 'BEGIN {FS = ":.*## "; printf "Uso: make <alvo>\n\n"} /^[a-zA-Z_-]+:.*## / {printf "  %-18s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -26,7 +26,7 @@ test-race: ## Executa os testes com detector de corrida
 lint: ## Executa o golangci-lint instalado localmente
 	golangci-lint run ./...
 
-generate: ## Gera o código SQLC
+generate: docs-generate ## Gera o código SQLC e OpenAPI
 	sqlc generate
 
 fmt: ## Formata o código Go
@@ -53,5 +53,11 @@ docker-down: ## Encerra os serviços sem apagar os dados
 docker-logs: ## Acompanha os logs da API
 	docker compose logs -f api
 
-docs-validate: ## Valida o contrato OpenAPI em um container
-	docker run --rm -v "$(CURDIR):/spec:ro" redocly/cli:1.34.3 lint /spec/docs/openapi.yaml
+docs-generate: ## Gera build/openapi.yaml a partir das rotas e tipos Go
+	go run ./cmd/openapi
+
+docs-check: ## Verifica se o artefato OpenAPI gerado está atualizado
+	go run ./cmd/openapi -check
+
+docs-validate: docs-generate ## Valida o contrato OpenAPI gerado em um container
+	docker run --rm -v "$(CURDIR):/spec:ro" redocly/cli:1.34.3 lint /spec/build/openapi.yaml

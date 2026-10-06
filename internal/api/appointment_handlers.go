@@ -16,16 +16,6 @@ import (
 	"github.com/pet-finder-app/petfinder-api/internal/domain"
 )
 
-type appointmentRequest struct {
-	Purpose      string    `json:"purpose"`
-	StartsAt     time.Time `json:"starts_at"`
-	EndsAt       time.Time `json:"ends_at"`
-	Timezone     string    `json:"timezone"`
-	LocationName string    `json:"location_name"`
-	Address      string    `json:"address"`
-	Instructions string    `json:"instructions"`
-}
-
 func validateAppointment(request *appointmentRequest) fieldErrors {
 	errs := fieldErrors{}
 	switch request.Purpose {
@@ -104,16 +94,7 @@ func (s *Server) updateAppointment(w http.ResponseWriter, r *http.Request) {
 		writeServiceError(w, ErrForbidden)
 		return
 	}
-	var request struct {
-		StartsAt     *time.Time `json:"starts_at"`
-		EndsAt       *time.Time `json:"ends_at"`
-		Timezone     *string    `json:"timezone"`
-		LocationName *string    `json:"location_name"`
-		Address      *string    `json:"address"`
-		Instructions *string    `json:"instructions"`
-		Status       *string    `json:"status"`
-		Reason       *string    `json:"reason"`
-	}
+	var request updateAppointmentRequest
 	if !decodeJSON(w, r, &request) {
 		return
 	}
@@ -224,7 +205,7 @@ func (s *Server) issueAppointmentOTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Cache-Control", "no-store")
-	writeJSON(w, http.StatusCreated, map[string]any{"code": code, "expires_at": expires})
+	writeJSON(w, http.StatusCreated, issuedOTPResponse{Code: code, ExpiresAt: expires})
 }
 
 func (s *Server) confirmAppointment(w http.ResponseWriter, r *http.Request) {
@@ -234,10 +215,7 @@ func (s *Server) confirmAppointment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	actor, _ := subjectUUID(r)
-	var request struct {
-		Type    string `json:"type"`
-		OTPCode string `json:"otp_code"`
-	}
+	var request appointmentConfirmationRequest
 	if !decodeJSON(w, r, &request) {
 		return
 	}

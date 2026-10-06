@@ -14,12 +14,7 @@ var reportCategories = map[string]bool{"payment_request": true, "fraud": true, "
 
 func (s *Server) createReport(w http.ResponseWriter, r *http.Request) {
 	actor, _ := subjectUUID(r)
-	var request struct {
-		Category    string `json:"category"`
-		Description string `json:"description"`
-		SubjectType string `json:"subject_type"`
-		SubjectID   string `json:"subject_id"`
-	}
+	var request reportRequest
 	if !decodeJSON(w, r, &request) {
 		return
 	}
@@ -82,7 +77,7 @@ func (s *Server) listReports(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	page.Total = len(items)
-	writeJSON(w, http.StatusOK, map[string]any{"items": items, "page": page})
+	writeJSON(w, http.StatusOK, collectionResponse[database.ListOpenReportsRow]{Items: items, Page: page})
 }
 
 func (s *Server) reportAllowed(r *http.Request, report database.Report) bool {
@@ -139,10 +134,7 @@ func (s *Server) updateReport(w http.ResponseWriter, r *http.Request) {
 		writeServiceError(w, ErrForbidden)
 		return
 	}
-	var request struct {
-		Status     string `json:"status"`
-		Resolution string `json:"resolution"`
-	}
+	var request updateReportRequest
 	if !decodeJSON(w, r, &request) {
 		return
 	}

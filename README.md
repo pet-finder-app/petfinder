@@ -9,7 +9,7 @@ API em Go para descoberta e adoção segura de animais. Toda adoção é mediada
 - SQLC para acesso tipado ao banco;
 - golang-migrate para versionamento do schema;
 - Docker Compose para o ambiente local;
-- OpenAPI 3.0 para o contrato HTTP.
+- OpenAPI 3.1 gerado com Huma para o contrato HTTP.
 
 ## Início rápido com Docker
 
@@ -47,13 +47,15 @@ Comandos principais:
 |---|---|
 | `make test` | Executa os testes |
 | `make test-race` | Executa testes, detector de corrida e cobertura |
-| `make generate` | Regenera o pacote de banco com SQLC |
+| `make generate` | Regenera SQLC e o contrato OpenAPI |
 | `make lint` | Executa o golangci-lint |
 | `make check` | Executa geração, testes, lint e validação do OpenAPI |
 | `make build` | Gera `bin/petfinder` |
 | `make migrate-up` | Aplica migrações pendentes |
 | `make migrate-down` | Reverte a última migração |
-| `make docs-validate` | Valida `docs/openapi.yaml` |
+| `make docs-generate` | Gera `build/openapi.yaml` sem precisar de banco ou configuração |
+| `make docs-check` | Verifica se o YAML gerado está atualizado |
+| `make docs-validate` | Gera e valida o OpenAPI com Redocly |
 
 ## Configuração
 
@@ -75,7 +77,18 @@ Em produção, use TLS no proxy de entrada, um segredo aleatório vindo de um co
 
 ## Contrato HTTP
 
-O contrato completo está em [docs/openapi.yaml](docs/openapi.yaml). Ele descreve autenticação Bearer, validação, erros, paginação e os recursos de perfil, organizações, animais, preferências, solicitações, conversas mediadas, agendamentos com OTP e denúncias.
+O contrato OpenAPI 3.1 é gerado pelo Huma a partir do mesmo registro de rotas usado pelo servidor e dos tipos Go de requisição e resposta. Não há mais um YAML mantido manualmente. Os tags de validação dos corpos JSON também são aplicados nas requisições; regras de negócio e autorização continuam nos handlers.
+
+Com a API em execução, consulte `/openapi.yaml` ou `/openapi.json`. Para exportar sem iniciar o servidor ou conectar ao PostgreSQL:
+
+```sh
+make docs-generate
+make docs-check
+# destino opcional, inclusive stdout com -output -
+go run ./cmd/openapi -output build/petfinder.yaml
+```
+
+O arquivo `build/openapi.yaml` é um artefato ignorado pelo Git. Para modificar o contrato, altere `internal/api/routes.go` e os tipos em `internal/api/contracts.go`, depois regenere. Os modelos de resposta do banco vêm do código SQLC.
 
 Rotas de coleção aceitam `page` (a partir de 1) e `page_size` (1 a 100). Erros usam um objeto de problema com `type`, `title`, `status`, `detail` e, em falhas de validação, `errors`. O cabeçalho `X-Request-ID` permite correlacionar requisições e logs.
 
@@ -107,7 +120,8 @@ Não edite manualmente `internal/database`: altere o SQL e regenere o pacote.
 cmd/api/             composição e inicialização da API
 db/migrations/       evolução do schema PostgreSQL
 db/queries/          consultas processadas pelo SQLC
-docs/openapi.yaml    contrato público da API
+cmd/openapi/         exportação do contrato OpenAPI gerado
+build/openapi.yaml   artefato gerado, não editável manualmente
 internal/api/        handlers, validação e middleware HTTP
 internal/auth/       senhas, tokens e autenticação
 internal/config/     carregamento da configuração

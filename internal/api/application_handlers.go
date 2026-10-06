@@ -39,7 +39,7 @@ func (s *Server) listApplications(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		page.Total = len(items)
-		writeJSON(w, http.StatusOK, map[string]any{"items": items, "page": page})
+		writeJSON(w, http.StatusOK, collectionResponse[database.ListOrganizationApplicationsRow]{Items: items, Page: page})
 		return
 	}
 	items, err := s.queries.ListAdopterApplications(r.Context(), database.ListAdopterApplicationsParams{AdopterID: actor, PageOffset: offset, PageSize: size})
@@ -48,15 +48,12 @@ func (s *Server) listApplications(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	page.Total = len(items)
-	writeJSON(w, http.StatusOK, map[string]any{"items": items, "page": page})
+	writeJSON(w, http.StatusOK, collectionResponse[database.ListAdopterApplicationsRow]{Items: items, Page: page})
 }
 
 func (s *Server) createApplication(w http.ResponseWriter, r *http.Request) {
 	actor, _ := subjectUUID(r)
-	var request struct {
-		AnimalID     string `json:"animal_id"`
-		Introduction string `json:"introduction"`
-	}
+	var request applicationRequest
 	if !decodeJSON(w, r, &request) {
 		return
 	}
@@ -91,7 +88,7 @@ func (s *Server) createApplication(w http.ResponseWriter, r *http.Request) {
 		writeServiceError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, map[string]any{"application": application, "conversation_id": uuidString(conversation.ID)})
+	writeJSON(w, http.StatusCreated, applicationCreatedResponse{Application: application, ConversationID: uuidString(conversation.ID)})
 }
 
 func (s *Server) applicationAccess(r *http.Request, application database.GetAdoptionApplicationByIDRow, manage bool) bool {
@@ -130,9 +127,9 @@ func (s *Server) getApplication(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	screening, screeningErr := s.queries.GetLatestApplicationScreening(r.Context(), id)
-	response := map[string]any{"application": application, "history": history}
+	response := applicationDetailResponse{Application: application, History: history}
 	if screeningErr == nil {
-		response["screening"] = screening
+		response.Screening = &screening
 	} else if screeningErr != pgx.ErrNoRows {
 		handleDBError(w, screeningErr)
 		return
@@ -156,14 +153,7 @@ func (s *Server) submitScreening(w http.ResponseWriter, r *http.Request) {
 		writeServiceError(w, ErrForbidden)
 		return
 	}
-	var request struct {
-		Housing         string `json:"housing"`
-		Household       string `json:"household"`
-		Experience      string `json:"experience"`
-		CarePlan        string `json:"care_plan"`
-		HasOtherAnimals bool   `json:"has_other_animals"`
-		AcceptsFollowUp bool   `json:"accepts_follow_up"`
-	}
+	var request screeningRequest
 	if !decodeJSON(w, r, &request) {
 		return
 	}
@@ -231,10 +221,7 @@ func (s *Server) decideApplication(w http.ResponseWriter, r *http.Request) {
 		writeServiceError(w, ErrForbidden)
 		return
 	}
-	var request struct {
-		Decision string `json:"decision"`
-		Reason   string `json:"reason"`
-	}
+	var request applicationDecisionRequest
 	if !decodeJSON(w, r, &request) {
 		return
 	}
@@ -304,7 +291,7 @@ func (s *Server) listConversations(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		page.Total = len(items)
-		writeJSON(w, http.StatusOK, map[string]any{"items": items, "page": page})
+		writeJSON(w, http.StatusOK, collectionResponse[database.ListOrganizationConversationsRow]{Items: items, Page: page})
 		return
 	}
 	items, err := s.queries.ListUserConversations(r.Context(), database.ListUserConversationsParams{UserID: actor, PageOffset: offset, PageSize: size})
@@ -313,7 +300,7 @@ func (s *Server) listConversations(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	page.Total = len(items)
-	writeJSON(w, http.StatusOK, map[string]any{"items": items, "page": page})
+	writeJSON(w, http.StatusOK, collectionResponse[database.ListUserConversationsRow]{Items: items, Page: page})
 }
 
 func (s *Server) conversationAllowed(r *http.Request, conversation database.Conversation) (bool, bool) {
@@ -351,7 +338,7 @@ func (s *Server) listMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	page.Total = len(items)
-	writeJSON(w, http.StatusOK, map[string]any{"items": items, "page": page})
+	writeJSON(w, http.StatusOK, collectionResponse[database.Message]{Items: items, Page: page})
 }
 
 func (s *Server) sendMessage(w http.ResponseWriter, r *http.Request) {
@@ -371,9 +358,7 @@ func (s *Server) sendMessage(w http.ResponseWriter, r *http.Request) {
 		writeServiceError(w, ErrForbidden)
 		return
 	}
-	var request struct {
-		Body string `json:"body"`
-	}
+	var request messageRequest
 	if !decodeJSON(w, r, &request) {
 		return
 	}
@@ -396,9 +381,9 @@ func (s *Server) sendMessage(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	response := map[string]any{"message": message}
+	response := messageResponse{Message: message}
 	if inspection.Flagged && !moderator {
-		response["warning"] = "message flagged for organization review"
+		response.Warning = "message flagged for organization review"
 	}
 	writeJSON(w, http.StatusCreated, response)
 }

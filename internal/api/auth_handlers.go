@@ -12,14 +12,6 @@ import (
 	"github.com/pet-finder-app/petfinder-api/internal/database"
 )
 
-type registerRequest struct {
-	Name                  string `json:"name"`
-	Email                 string `json:"email"`
-	Password              string `json:"password"`
-	AcceptedTerms         bool   `json:"accepted_terms"`
-	AcceptedPrivacyPolicy bool   `json:"accepted_privacy_policy"`
-}
-
 func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 	var request registerRequest
 	if !decodeJSON(w, r, &request) {
@@ -89,13 +81,8 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, s.authResponse(user, roles, access, refresh))
 }
 
-type loginRequest struct{ Email, Password string }
-
 func (s *Server) login(w http.ResponseWriter, r *http.Request) {
-	var request struct {
-		Email    string `json:"email"`
-		Password string `json:"password"`
-	}
+	var request loginRequest
 	if !decodeJSON(w, r, &request) {
 		return
 	}
@@ -124,9 +111,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) refresh(w http.ResponseWriter, r *http.Request) {
-	var request struct {
-		RefreshToken string `json:"refresh_token"`
-	}
+	var request refreshRequest
 	if !decodeJSON(w, r, &request) {
 		return
 	}
@@ -180,9 +165,7 @@ func (s *Server) refresh(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
-	var request struct {
-		RefreshToken string `json:"refresh_token"`
-	}
+	var request refreshRequest
 	if !decodeJSON(w, r, &request) {
 		return
 	}
@@ -224,11 +207,7 @@ func (s *Server) updateProfile(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, http.StatusUnauthorized, "Unauthorized", "invalid identity", nil)
 		return
 	}
-	var request struct {
-		Name     *string        `json:"name"`
-		Phone    *string        `json:"phone"`
-		Location *locationInput `json:"location"`
-	}
+	var request updateProfileRequest
 	if !decodeJSON(w, r, &request) {
 		return
 	}

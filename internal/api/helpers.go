@@ -22,20 +22,6 @@ import (
 	"github.com/pet-finder-app/petfinder-api/internal/database"
 )
 
-type locationInput struct {
-	City        string   `json:"city"`
-	State       string   `json:"state"`
-	CountryCode string   `json:"country_code"`
-	Latitude    *float64 `json:"latitude,omitempty"`
-	Longitude   *float64 `json:"longitude,omitempty"`
-}
-
-type pageResponse struct {
-	Page     int `json:"page"`
-	PageSize int `json:"page_size"`
-	Total    int `json:"total"`
-}
-
 func pagination(r *http.Request) (int32, int32, pageResponse) {
 	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
 	size, _ := strconv.Atoi(r.URL.Query().Get("page_size"))
@@ -78,11 +64,12 @@ func uuidString(value pgtype.UUID) string {
 	return uuid.UUID(value.Bytes).String()
 }
 
-func timestamp(value pgtype.Timestamptz) any {
+func timestamp(value pgtype.Timestamptz) *time.Time {
 	if !value.Valid {
 		return nil
 	}
-	return value.Time.UTC()
+	utc := value.Time.UTC()
+	return &utc
 }
 
 func numeric(value *float64) pgtype.Numeric {
@@ -94,34 +81,34 @@ func numeric(value *float64) pgtype.Numeric {
 	return n
 }
 
-func userView(user database.User, roles []database.Role) map[string]any {
+func userView(user database.User, roles []database.Role) userResponse {
 	roleNames := make([]string, 0, len(roles))
 	for _, role := range roles {
 		roleNames = append(roleNames, role.Key)
 	}
-	var location any
+	var location *locationResponse
 	if user.City != nil || user.StateCode != nil {
-		location = map[string]any{"city": user.City, "state": user.StateCode, "country_code": user.CountryCode}
+		location = &locationResponse{City: user.City, State: user.StateCode, CountryCode: user.CountryCode}
 	}
-	return map[string]any{
-		"id": uuidString(user.ID), "name": user.DisplayName, "email": user.Email,
-		"phone": user.Phone, "roles": roleNames, "location": location,
-		"created_at": timestamp(user.CreatedAt), "updated_at": timestamp(user.UpdatedAt),
+	return userResponse{
+		ID: uuidString(user.ID), Name: user.DisplayName, Email: user.Email,
+		Phone: user.Phone, Roles: roleNames, Location: location,
+		CreatedAt: timestamp(user.CreatedAt), UpdatedAt: timestamp(user.UpdatedAt),
 	}
 }
 
-func organizationView(org database.Organization, privileged bool) map[string]any {
-	result := map[string]any{
-		"id": uuidString(org.ID), "name": org.DisplayName, "description": org.Description,
-		"verification_status": org.VerificationStatus, "verified_at": timestamp(org.VerifiedAt),
-		"official_channels": map[string]any{"website": org.WebsiteUrl, "email": org.OfficialEmail, "phone": org.OfficialPhone},
-		"location":          map[string]any{"city": org.City, "state": org.StateCode, "country_code": org.CountryCode},
-		"created_at":        timestamp(org.CreatedAt), "updated_at": timestamp(org.UpdatedAt),
+func organizationView(org database.Organization, privileged bool) organizationResponse {
+	result := organizationResponse{
+		ID: uuidString(org.ID), Name: org.DisplayName, Description: org.Description,
+		VerificationStatus: org.VerificationStatus, VerifiedAt: timestamp(org.VerifiedAt),
+		OfficialChannels: officialChannelsResponse{Website: org.WebsiteUrl, Email: org.OfficialEmail, Phone: org.OfficialPhone},
+		Location:         locationResponse{City: &org.City, State: &org.StateCode, CountryCode: org.CountryCode},
+		CreatedAt:        timestamp(org.CreatedAt), UpdatedAt: timestamp(org.UpdatedAt),
 	}
 	if privileged {
-		result["legal_name"] = org.LegalName
-		result["registration_number"] = org.RegistrationNumber
-		result["verification_notes"] = org.VerificationNotes
+		result.LegalName = &org.LegalName
+		result.RegistrationNumber = &org.RegistrationNumber
+		result.VerificationNotes = &org.VerificationNotes
 	}
 	return result
 }
@@ -177,10 +164,10 @@ func (s *Server) createRefreshSession(r *http.Request, q *database.Queries, user
 	return token, session, err
 }
 
-func (s *Server) authResponse(user database.User, roles []database.Role, access, refresh string) map[string]any {
-	return map[string]any{
-		"access_token": access, "refresh_token": refresh, "token_type": "Bearer",
-		"expires_in": int(s.accessTTL.Seconds()), "user": userView(user, roles),
+func (s *Server) authResponse(user database.User, roles []database.Role, access, refresh string) authSessionResponse {
+	return authSessionResponse{
+		AccessToken: access, RefreshToken: refresh, TokenType: "Bearer",
+		ExpiresIn: int(s.accessTTL.Seconds()), User: userView(user, roles),
 	}
 }
 

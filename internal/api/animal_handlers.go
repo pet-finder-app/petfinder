@@ -13,20 +13,6 @@ import (
 	"github.com/pet-finder-app/petfinder-api/internal/domain"
 )
 
-type animalRequest struct {
-	OrganizationID       *string       `json:"organization_id"`
-	Name                 string        `json:"name"`
-	Species              string        `json:"species"`
-	Breed                *string       `json:"breed"`
-	Size                 string        `json:"size"`
-	Sex                  string        `json:"sex"`
-	ApproximateBirthDate *string       `json:"approximate_birth_date"`
-	Description          string        `json:"description"`
-	HealthNotes          string        `json:"health_notes"`
-	BehaviorNotes        string        `json:"behavior_notes"`
-	Location             locationInput `json:"location"`
-}
-
 func validateAnimal(request *animalRequest) fieldErrors {
 	errs := fieldErrors{}
 	request.Name = required(errs, "name", request.Name, 100)
@@ -103,7 +89,7 @@ func (s *Server) listAnimals(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	page.Total = len(items)
-	writeJSON(w, http.StatusOK, map[string]any{"items": items, "page": page})
+	writeJSON(w, http.StatusOK, collectionResponse[database.ListAvailableAnimalsRow]{Items: items, Page: page})
 }
 
 func (s *Server) createAnimal(w http.ResponseWriter, r *http.Request) {
@@ -205,7 +191,7 @@ func (s *Server) getAnimal(w http.ResponseWriter, r *http.Request) {
 		handleDBError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"animal": animal, "images": images})
+	writeJSON(w, http.StatusOK, animalDetailResponse{Animal: animal, Images: images})
 }
 
 func (s *Server) animalWriteAllowed(r *http.Request, animal database.Animal, publish bool) bool {
@@ -241,9 +227,14 @@ func (s *Server) updateAnimal(w http.ResponseWriter, r *http.Request) {
 		writeServiceError(w, ErrForbidden)
 		return
 	}
-	var request animalRequest
-	if !decodeJSON(w, r, &request) {
+	var patch updateAnimalRequest
+	if !decodeJSON(w, r, &patch) {
 		return
+	}
+	request := animalRequest{
+		Name: patch.Name, Species: patch.Species, Breed: patch.Breed, Size: patch.Size, Sex: patch.Sex,
+		ApproximateBirthDate: patch.ApproximateBirthDate, Description: patch.Description,
+		HealthNotes: patch.HealthNotes, BehaviorNotes: patch.BehaviorNotes, Location: patch.Location,
 	}
 	if request.Name == "" {
 		request.Name = current.Name
@@ -311,10 +302,7 @@ func (s *Server) updateAnimalStatus(w http.ResponseWriter, r *http.Request) {
 		writeServiceError(w, ErrForbidden)
 		return
 	}
-	var request struct {
-		Status domain.AnimalStatus `json:"status"`
-		Reason string              `json:"reason"`
-	}
+	var request animalStatusRequest
 	if !decodeJSON(w, r, &request) {
 		return
 	}
@@ -359,11 +347,7 @@ func (s *Server) addAnimalImage(w http.ResponseWriter, r *http.Request) {
 		writeServiceError(w, ErrForbidden)
 		return
 	}
-	var request struct {
-		URL      string `json:"url"`
-		AltText  string `json:"alt_text"`
-		Position int16  `json:"position"`
-	}
+	var request animalImageRequest
 	if !decodeJSON(w, r, &request) {
 		return
 	}
@@ -382,7 +366,7 @@ func (s *Server) addAnimalImage(w http.ResponseWriter, r *http.Request) {
 		handleDBError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, map[string]any{"id": uuidString(image.ID), "url": image.StorageKey, "alt_text": image.AltText, "position": image.Position, "moderation_status": image.ModerationStatus, "created_at": timestamp(image.CreatedAt)})
+	writeJSON(w, http.StatusCreated, animalImageResponse{ID: uuidString(image.ID), URL: image.StorageKey, AltText: image.AltText, Position: image.Position, ModerationStatus: image.ModerationStatus, CreatedAt: timestamp(image.CreatedAt)})
 }
 
 func (s *Server) removeAnimalImage(w http.ResponseWriter, r *http.Request) {
@@ -434,7 +418,7 @@ func (s *Server) listPreferences(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	page.Total = len(items)
-	writeJSON(w, http.StatusOK, map[string]any{"items": items, "page": page})
+	writeJSON(w, http.StatusOK, collectionResponse[database.ListPreferredAnimalsRow]{Items: items, Page: page})
 }
 
 func (s *Server) setPreference(w http.ResponseWriter, r *http.Request) {
@@ -444,9 +428,7 @@ func (s *Server) setPreference(w http.ResponseWriter, r *http.Request) {
 		invalidPath(w)
 		return
 	}
-	var request struct {
-		Value string `json:"value"`
-	}
+	var request preferenceRequest
 	if !decodeJSON(w, r, &request) {
 		return
 	}

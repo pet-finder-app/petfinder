@@ -6,7 +6,10 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"reflect"
 	"strings"
+
+	"github.com/danielgtaylor/huma/v2"
 )
 
 type Problem struct {
@@ -37,6 +40,40 @@ func writeProblem(w http.ResponseWriter, status int, title, detail string, field
 
 func decodeJSON(w http.ResponseWriter, r *http.Request, dst any) bool {
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+	// Validate the original JSON so presence, enum, range and length constraints
+	// match the generated schema. The strict decoder below still rejects unknown
+	// fields and trailing content, including when used without a route contract.
+	if contract, ok := r.Context().Value(requestContractKey{}).(*requestContract); ok {
+		if reflect.TypeOf(dst) != reflect.PointerTo(contract.typeOf) {
+			writeProblem(w, http.StatusInternalServerError, "Internal server error", "request contract mismatch", nil)
+			return false
+		}
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			writeProblem(w, http.StatusBadRequest, "Invalid request body", "unable to read request body", nil)
+			return false
+		}
+		var value any
+		if err := json.Unmarshal(body, &value); err != nil {
+			writeProblem(w, http.StatusBadRequest, "Invalid request body", err.Error(), nil)
+			return false
+		}
+		result := &huma.ValidateResult{}
+		huma.Validate(contract.registry, contract.schema, huma.NewPathBuffer(nil, 0), huma.ModeWriteToServer, value, result)
+		if len(result.Errors) > 0 {
+			fields := map[string]string{}
+			for _, err := range result.Errors {
+				if detail, ok := err.(*huma.ErrorDetail); ok {
+					fields[detail.Location] = detail.Message
+				} else {
+					fields["body"] = err.Error()
+				}
+			}
+			writeProblem(w, http.StatusUnprocessableEntity, "Validation failed", "review the invalid fields", fields)
+			return false
+		}
+		r.Body = io.NopCloser(strings.NewReader(string(body)))
+	}
 	decoder := json.NewDecoder(r.Body)
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(dst); err != nil {

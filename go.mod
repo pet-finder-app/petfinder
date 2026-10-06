@@ -3,6 +3,7 @@ module github.com/pet-finder-app/petfinder-api
 go 1.25.0
 
 require (
+	github.com/danielgtaylor/huma/v2 v2.34.1
 	github.com/golang-jwt/jwt/v5 v5.3.0
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.7.6

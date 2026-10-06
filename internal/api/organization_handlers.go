@@ -8,21 +8,6 @@ import (
 	"github.com/pet-finder-app/petfinder-api/internal/database"
 )
 
-type officialChannels struct {
-	Website *string `json:"website"`
-	Email   string  `json:"email"`
-	Phone   *string `json:"phone"`
-}
-
-type createOrganizationRequest struct {
-	Name               string           `json:"name"`
-	LegalName          string           `json:"legal_name"`
-	RegistrationNumber string           `json:"registration_number"`
-	Description        string           `json:"description"`
-	OfficialChannels   officialChannels `json:"official_channels"`
-	Location           locationInput    `json:"location"`
-}
-
 func validateOrganization(request *createOrganizationRequest) fieldErrors {
 	errs := fieldErrors{}
 	request.Name = required(errs, "name", request.Name, 120)
@@ -59,12 +44,12 @@ func (s *Server) listOrganizations(w http.ResponseWriter, r *http.Request) {
 		handleDBError(w, err)
 		return
 	}
-	views := make([]map[string]any, 0, len(items))
+	views := make([]organizationResponse, 0, len(items))
 	for _, item := range items {
 		views = append(views, organizationView(item, false))
 	}
 	page.Total = len(views)
-	writeJSON(w, http.StatusOK, map[string]any{"items": views, "page": page})
+	writeJSON(w, http.StatusOK, collectionResponse[organizationResponse]{Items: views, Page: page})
 }
 
 func (s *Server) createOrganization(w http.ResponseWriter, r *http.Request) {
@@ -166,12 +151,7 @@ func (s *Server) updateOrganization(w http.ResponseWriter, r *http.Request) {
 		handleDBError(w, err)
 		return
 	}
-	var request struct {
-		Name             *string           `json:"name"`
-		Description      *string           `json:"description"`
-		OfficialChannels *officialChannels `json:"official_channels"`
-		Location         *locationInput    `json:"location"`
-	}
+	var request updateOrganizationRequest
 	if !decodeJSON(w, r, &request) {
 		return
 	}
@@ -215,10 +195,7 @@ func (s *Server) verifyOrganization(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	actor, _ := subjectUUID(r)
-	var request struct {
-		Decision string `json:"decision"`
-		Reason   string `json:"reason"`
-	}
+	var request organizationVerificationRequest
 	if !decodeJSON(w, r, &request) {
 		return
 	}
@@ -252,7 +229,7 @@ func (s *Server) listOrganizationMembers(w http.ResponseWriter, r *http.Request)
 		handleDBError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": members})
+	writeJSON(w, http.StatusOK, memberListResponse{Items: members})
 }
 
 func (s *Server) addOrganizationMember(w http.ResponseWriter, r *http.Request) {
@@ -267,10 +244,7 @@ func (s *Server) addOrganizationMember(w http.ResponseWriter, r *http.Request) {
 		writeServiceError(w, ErrForbidden)
 		return
 	}
-	var request struct {
-		Email string `json:"email"`
-		Role  string `json:"role"`
-	}
+	var request addOrganizationMemberRequest
 	if !decodeJSON(w, r, &request) {
 		return
 	}

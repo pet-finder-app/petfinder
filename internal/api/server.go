@@ -25,54 +25,8 @@ func NewServer(pool *pgxpool.Pool, tokens *auth.TokenManager, accessTTL, refresh
 
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
-	mux.Handle("GET /health", healthHandler(s.pool))
-	mux.HandleFunc("POST /v1/auth/register", s.register)
-	mux.HandleFunc("POST /v1/auth/login", s.login)
-	mux.HandleFunc("POST /v1/auth/refresh", s.refresh)
-	mux.Handle("POST /v1/auth/logout", s.protected(s.logout))
-
-	mux.Handle("GET /v1/me", s.protected(s.getProfile))
-	mux.Handle("PATCH /v1/me", s.protected(s.updateProfile))
-
-	mux.HandleFunc("GET /v1/organizations", s.listOrganizations)
-	mux.Handle("POST /v1/organizations", s.protected(s.createOrganization))
-	mux.Handle("GET /v1/organizations/{organizationId}", s.optionalAuth(s.getOrganization))
-	mux.Handle("PATCH /v1/organizations/{organizationId}", s.protected(s.updateOrganization))
-	mux.Handle("POST /v1/organizations/{organizationId}/verification", s.admin(s.verifyOrganization))
-	mux.Handle("GET /v1/organizations/{organizationId}/members", s.protected(s.listOrganizationMembers))
-	mux.Handle("POST /v1/organizations/{organizationId}/members", s.protected(s.addOrganizationMember))
-	mux.Handle("DELETE /v1/organizations/{organizationId}/members/{userId}", s.protected(s.removeOrganizationMember))
-
-	mux.Handle("GET /v1/animals", s.optionalAuth(s.listAnimals))
-	mux.Handle("POST /v1/animals", s.protected(s.createAnimal))
-	mux.Handle("GET /v1/animals/{animalId}", s.optionalAuth(s.getAnimal))
-	mux.Handle("PATCH /v1/animals/{animalId}", s.protected(s.updateAnimal))
-	mux.Handle("PATCH /v1/animals/{animalId}/status", s.protected(s.updateAnimalStatus))
-	mux.Handle("POST /v1/animals/{animalId}/images", s.protected(s.addAnimalImage))
-	mux.Handle("DELETE /v1/animals/{animalId}/images/{imageId}", s.protected(s.removeAnimalImage))
-	mux.Handle("GET /v1/preferences", s.protected(s.listPreferences))
-	mux.Handle("PUT /v1/animals/{animalId}/preference", s.protected(s.setPreference))
-
-	mux.Handle("GET /v1/applications", s.protected(s.listApplications))
-	mux.Handle("POST /v1/applications", s.protected(s.createApplication))
-	mux.Handle("GET /v1/applications/{applicationId}", s.protected(s.getApplication))
-	mux.Handle("PUT /v1/applications/{applicationId}/screening", s.protected(s.submitScreening))
-	mux.Handle("POST /v1/applications/{applicationId}/decision", s.protected(s.decideApplication))
-
-	mux.Handle("GET /v1/conversations", s.protected(s.listConversations))
-	mux.Handle("GET /v1/conversations/{conversationId}/messages", s.protected(s.listMessages))
-	mux.Handle("POST /v1/conversations/{conversationId}/messages", s.protected(s.sendMessage))
-
-	mux.Handle("POST /v1/applications/{applicationId}/appointments", s.protected(s.createAppointment))
-	mux.Handle("PATCH /v1/appointments/{appointmentId}", s.protected(s.updateAppointment))
-	mux.Handle("POST /v1/appointments/{appointmentId}/otp", s.protected(s.issueAppointmentOTP))
-	mux.Handle("POST /v1/appointments/{appointmentId}/confirmations", s.protected(s.confirmAppointment))
-
-	mux.Handle("GET /v1/reports", s.protected(s.listReports))
-	mux.Handle("POST /v1/reports", s.protected(s.createReport))
-	mux.Handle("GET /v1/reports/{reportId}", s.protected(s.getReport))
-	mux.Handle("PATCH /v1/reports/{reportId}", s.protected(s.updateReport))
-
+	spec := registerRoutes(s, mux)
+	serveOpenAPI(mux, spec)
 	return commonMiddleware(mux)
 }
 
