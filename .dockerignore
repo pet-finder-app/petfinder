@@ -1,0 +1,13 @@
+.git
+.github
+.agents
+.codex
+.env
+.idea
+.vscode
+bin
+coverage.*
+*.out
+*.test
+README.md
+docs
