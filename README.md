@@ -100,6 +100,19 @@ Authorization: Bearer <access_token>
 
 Access tokens duram 15 minutos. O refresh token é rotacionado a cada renovação; senhas, refresh tokens e OTPs são persistidos somente como hashes.
 
+## Chat em tempo real
+
+`GET /v1/conversations/{conversationId}/ws` abre um WebSocket com o subprotocolo `petfinder.chat.v1` e aplica as mesmas regras de acesso das rotas de mensagens. Clientes nativos enviam o cabeçalho `Authorization`; navegadores, que não conseguem definir cabeçalhos no WebSocket, oferecem o token como um subprotocolo adicional:
+
+```js
+const socket = new WebSocket(`wss://api.exemplo/v1/conversations/${id}/ws`, ["petfinder.chat.v1", `bearer.${accessToken}`]);
+socket.send(JSON.stringify({ type: "message.send", client_id: "local-1", body: "Olá!" }));
+```
+
+O servidor envia `message.ack` para quem enviou (com `client_id` e o eventual `warning` de moderação), `message.created` para as demais conexões da conversa e `error` com um objeto de problema quando um comando falha. Mensagens enviadas pela rota REST também são distribuídas. Cada envio é autorizado novamente, então conversas encerradas e vínculos revogados valem sem reconexão.
+
+A conexão é fechada com o código `4001` quando o access token expira: renove o token, reconecte e liste as mensagens para recuperar o intervalo. Clientes que não acompanham o ritmo dos eventos são desconectados com `1008`, e o encerramento do servidor usa `1001`. A distribuição acontece em memória, dentro do processo; executar várias réplicas da API exige um broker compartilhado.
+
 ## Banco de dados e SQLC
 
 Migrações ficam em `db/migrations`, consultas em `db/queries` e o código gerado em `internal/database`. Para alterar o banco:

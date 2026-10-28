@@ -32,6 +32,11 @@ func (w *statusWriter) Write(p []byte) (int, error) {
 	return n, err
 }
 
+// Unwrap lets WebSocket upgrades reach the underlying http.Hijacker.
+func (w *statusWriter) Unwrap() http.ResponseWriter {
+	return w.ResponseWriter
+}
+
 func commonMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestID := r.Header.Get("X-Request-ID")

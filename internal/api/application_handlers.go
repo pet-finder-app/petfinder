@@ -347,45 +347,71 @@ func (s *Server) sendMessage(w http.ResponseWriter, r *http.Request) {
 		invalidPath(w)
 		return
 	}
-	actor, _ := subjectUUID(r)
-	conversation, err := s.queries.GetConversationByID(r.Context(), id)
+	moderator, err := s.authorizeMessage(r, id)
 	if err != nil {
-		handleDBError(w, err)
-		return
-	}
-	allowed, moderator := s.conversationAllowed(r, conversation)
-	if !allowed || conversation.Status != "open" {
-		writeServiceError(w, ErrForbidden)
+		writeServiceError(w, err)
 		return
 	}
 	var request messageRequest
 	if !decodeJSON(w, r, &request) {
 		return
 	}
-	request.Body = strings.TrimSpace(request.Body)
-	if len(request.Body) < 1 || len(request.Body) > 5000 {
-		writeProblem(w, http.StatusUnprocessableEntity, "Validation failed", "body must contain between 1 and 5000 characters", nil)
+	body, ok := messageBody(request.Body)
+	if !ok {
+		writeProblem(w, http.StatusUnprocessableEntity, "Validation failed", messageBodyRule, nil)
 		return
 	}
-	message, err := s.queries.CreateMessage(r.Context(), database.CreateMessageParams{ConversationID: id, SenderID: actor, Body: request.Body})
+	response, err := s.postMessage(r, id, body, moderator)
 	if err != nil {
-		handleDBError(w, err)
+		writeServiceError(w, err)
 		return
 	}
-	inspection := moderation.Inspect(request.Body)
+	s.chat.publish(id, chatEvent{Type: chatMessageCreated, Message: &response.Message}, nil)
+	writeJSON(w, http.StatusCreated, response)
+}
+
+// authorizeMessage reports whether the actor may post to an open conversation
+// and whether they see it as an organization moderator.
+func (s *Server) authorizeMessage(r *http.Request, conversationID pgtype.UUID) (bool, error) {
+	conversation, err := s.queries.GetConversationByID(r.Context(), conversationID)
+	if err != nil {
+		return false, serviceError(err)
+	}
+	allowed, moderator := s.conversationAllowed(r, conversation)
+	if !allowed || conversation.Status != "open" {
+		return false, ErrForbidden
+	}
+	return moderator, nil
+}
+
+const messageBodyRule = "body must contain between 1 and 5000 characters"
+
+func messageBody(raw string) (string, bool) {
+	body := strings.TrimSpace(raw)
+	return body, len(body) >= 1 && len(body) <= 5000
+}
+
+// postMessage stores an authorized, validated message and flags content that
+// moderation rules consider risky.
+func (s *Server) postMessage(r *http.Request, conversationID pgtype.UUID, body string, moderator bool) (messageResponse, error) {
+	actor, _ := subjectUUID(r)
+	message, err := s.queries.CreateMessage(r.Context(), database.CreateMessageParams{ConversationID: conversationID, SenderID: actor, Body: body})
+	if err != nil {
+		return messageResponse{}, serviceError(err)
+	}
+	inspection := moderation.Inspect(body)
 	if inspection.Flagged {
 		reason := strings.Join(inspection.Reasons, ",")
 		message, err = s.queries.ModerateMessage(r.Context(), database.ModerateMessageParams{ModerationStatus: "flagged", ModerationReason: &reason, ModeratedBy: actor, ID: message.ID})
 		if err != nil {
-			handleDBError(w, err)
-			return
+			return messageResponse{}, serviceError(err)
 		}
 	}
 	response := messageResponse{Message: message}
 	if inspection.Flagged && !moderator {
 		response.Warning = "message flagged for organization review"
 	}
-	writeJSON(w, http.StatusCreated, response)
+	return response, nil
 }
 
 var _ = pgtype.UUID{}

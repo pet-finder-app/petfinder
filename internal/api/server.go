@@ -17,10 +17,17 @@ type Server struct {
 	tokens     *auth.TokenManager
 	accessTTL  time.Duration
 	refreshTTL time.Duration
+	chat       *chatHub
 }
 
 func NewServer(pool *pgxpool.Pool, tokens *auth.TokenManager, accessTTL, refreshTTL time.Duration) *Server {
-	return &Server{pool: pool, queries: database.New(pool), tokens: tokens, accessTTL: accessTTL, refreshTTL: refreshTTL}
+	return &Server{pool: pool, queries: database.New(pool), tokens: tokens, accessTTL: accessTTL, refreshTTL: refreshTTL, chat: newChatHub()}
+}
+
+// CloseChat ends open chat WebSocket connections. http.Server.Shutdown does
+// not track hijacked connections, so register it with RegisterOnShutdown.
+func (s *Server) CloseChat() {
+	s.chat.close()
 }
 
 func (s *Server) Handler() http.Handler {

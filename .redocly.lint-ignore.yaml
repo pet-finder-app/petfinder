@@ -1,0 +1,8 @@
+# WebSocket upgrades answer 101, and the frame schemas are referenced only
+# from the x-websocket extension, which Redocly does not follow.
+build/openapi.yaml:
+  operation-2xx-response:
+    - '#/paths/~1v1~1conversations~1{conversationId}~1ws/get/responses'
+  no-unused-components:
+    - '#/components/schemas/ChatCommand'
+    - '#/components/schemas/ChatEvent'
