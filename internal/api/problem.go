@@ -29,13 +29,17 @@ func writeJSON(w http.ResponseWriter, status int, value any) {
 }
 
 func writeProblem(w http.ResponseWriter, status int, title, detail string, fields map[string]string) {
-	writeJSON(w, status, Problem{
+	writeJSON(w, status, newProblem(status, title, detail, fields))
+}
+
+func newProblem(status int, title, detail string, fields map[string]string) Problem {
+	return Problem{
 		Type:   "https://petfinder.local/problems/" + strings.ReplaceAll(strings.ToLower(http.StatusText(status)), " ", "-"),
 		Title:  title,
 		Status: status,
 		Detail: detail,
 		Errors: fields,
-	})
+	}
 }
 
 func decodeJSON(w http.ResponseWriter, r *http.Request, dst any) bool {
@@ -95,17 +99,22 @@ var (
 )
 
 func writeServiceError(w http.ResponseWriter, err error) {
+	problem := serviceProblem(err)
+	writeJSON(w, problem.Status, problem)
+}
+
+func serviceProblem(err error) Problem {
 	switch {
 	case errors.Is(err, ErrNotFound):
-		writeProblem(w, http.StatusNotFound, "Resource not found", "the requested resource does not exist", nil)
+		return newProblem(http.StatusNotFound, "Resource not found", "the requested resource does not exist", nil)
 	case errors.Is(err, ErrConflict):
-		writeProblem(w, http.StatusConflict, "Conflict", "the request conflicts with the current resource state", nil)
+		return newProblem(http.StatusConflict, "Conflict", "the request conflicts with the current resource state", nil)
 	case errors.Is(err, ErrForbidden):
-		writeProblem(w, http.StatusForbidden, "Forbidden", "you are not allowed to perform this action", nil)
+		return newProblem(http.StatusForbidden, "Forbidden", "you are not allowed to perform this action", nil)
 	case errors.Is(err, ErrInvalid):
-		writeProblem(w, http.StatusUnprocessableEntity, "Invalid operation", "the requested operation is not valid", nil)
+		return newProblem(http.StatusUnprocessableEntity, "Invalid operation", "the requested operation is not valid", nil)
 	default:
 		slog.Error("request failed", "error", err)
-		writeProblem(w, http.StatusInternalServerError, "Internal server error", "an unexpected error occurred", nil)
+		return newProblem(http.StatusInternalServerError, "Internal server error", "an unexpected error occurred", nil)
 	}
 }

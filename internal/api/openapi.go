@@ -94,6 +94,23 @@ func adminOnly(reg *routeRegistry, op *huma.Operation) {
 	op.Description = "Requires the platform_admin role."
 }
 
+// chatProtocol documents the WebSocket upgrade and frame schemas, which
+// OpenAPI cannot describe as request and response bodies.
+func chatProtocol(reg *routeRegistry, op *huma.Operation) {
+	registry := reg.spec.Components.Schemas
+	op.Description = "Upgrades to a WebSocket using the `" + chatSubprotocol + "` subprotocol. Browsers, which cannot set the " +
+		"Authorization header, may instead offer the access token as an additional `" + bearerSubprotocol + "<token>` subprotocol. " +
+		"Clients send `ChatCommand` text frames and receive `ChatEvent` frames: `message.created` for messages from other " +
+		"connections, `message.ack` answering the sender, and `error`. The server closes the connection with code 4001 when the " +
+		"access token expires; refresh it and reconnect, then list messages to fill any gap."
+	op.Responses["101"].Description = "Switching to the WebSocket protocol"
+	op.Extensions = map[string]any{"x-websocket": map[string]any{
+		"subprotocol": chatSubprotocol,
+		"client":      registry.Schema(reflect.TypeFor[chatCommand](), true, ""),
+		"server":      registry.Schema(reflect.TypeFor[chatEvent](), true, ""),
+	}}
+}
+
 func responseAlternative[T any](reg *routeRegistry, op *huma.Operation) {
 	response := op.Responses[strconv.Itoa(op.DefaultStatus)].Content["application/json"]
 	response.Schema = &huma.Schema{AnyOf: []*huma.Schema{response.Schema, reg.spec.Components.Schemas.Schema(reflect.TypeFor[T](), true, "")}}

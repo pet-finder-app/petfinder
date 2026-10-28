@@ -176,23 +176,26 @@ func invalidPath(w http.ResponseWriter) {
 }
 
 func handleDBError(w http.ResponseWriter, err error) {
+	writeServiceError(w, serviceError(err))
+}
+
+// serviceError maps database failures to the service errors exposed to clients.
+func serviceError(err error) error {
 	if errors.Is(err, pgx.ErrNoRows) {
-		writeServiceError(w, ErrNotFound)
-		return
+		return ErrNotFound
 	}
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) {
 		switch pgErr.Code {
 		case "23505":
-			writeServiceError(w, ErrConflict)
+			return ErrConflict
 		case "23503", "23514", "22P02":
-			writeServiceError(w, ErrInvalid)
+			return ErrInvalid
 		default:
-			writeServiceError(w, fmt.Errorf("database operation: %w", err))
+			return fmt.Errorf("database operation: %w", err)
 		}
-		return
 	}
-	writeServiceError(w, err)
+	return err
 }
 
 func hasRole(r *http.Request, role auth.Role) bool {

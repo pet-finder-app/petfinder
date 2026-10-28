@@ -58,11 +58,12 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	handler := api.NewServer(pool, tokens, cfg.AccessTokenTTL, cfg.RefreshTokenTTL).Handler()
+	apiServer := api.NewServer(pool, tokens, cfg.AccessTokenTTL, cfg.RefreshTokenTTL)
 	server := &http.Server{
-		Addr: cfg.HTTPAddress, Handler: handler, ReadHeaderTimeout: 5 * time.Second,
+		Addr: cfg.HTTPAddress, Handler: apiServer.Handler(), ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout: 15 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 90 * time.Second,
 	}
+	server.RegisterOnShutdown(apiServer.CloseChat)
 
 	serverErrors := make(chan error, 1)
 	go func() {
