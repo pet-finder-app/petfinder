@@ -235,6 +235,12 @@ func (s *Server) confirmAppointment(w http.ResponseWriter, r *http.Request) {
 		handleDBError(w, err)
 		return
 	}
+	// Only a scheduled appointment can be completed, so confirming any other
+	// would be recorded without ever finishing the adoption.
+	if appointment.Status != "scheduled" {
+		writeProblem(w, http.StatusConflict, "Invalid state transition", "only scheduled appointments can be confirmed", nil)
+		return
+	}
 	application, err := q.GetAdoptionApplicationByID(r.Context(), appointment.ApplicationID)
 	if err != nil {
 		handleDBError(w, err)

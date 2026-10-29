@@ -122,6 +122,7 @@ func TestAdoptionFromApplicationToDelivery(t *testing.T) {
 	if appointment.Status != "proposed" {
 		t.Fatalf("new appointment status = %q", appointment.Status)
 	}
+	s.owner.do(http.MethodPost, appointmentPath+"/confirmations", map[string]any{"type": "delivery"}, http.StatusConflict, nil)
 	s.owner.do(http.MethodPatch, appointmentPath, map[string]any{"status": "scheduled"}, http.StatusOK, &appointment)
 	if appointment.Status != "scheduled" {
 		t.Fatalf("appointment status = %q after scheduling", appointment.Status)
@@ -150,8 +151,8 @@ func TestAdoptionFromApplicationToDelivery(t *testing.T) {
 	if current.Animal.Status != "adopted" {
 		t.Fatalf("animal status = %q after both confirmations", current.Animal.Status)
 	}
-	// The code was consumed by the successful confirmation.
-	s.adopter.do(http.MethodPost, confirmations, map[string]any{"type": "receipt", "otp_code": otp.Code}, http.StatusUnauthorized, nil)
+	// The completed appointment accepts no further confirmations.
+	s.adopter.do(http.MethodPost, confirmations, map[string]any{"type": "receipt", "otp_code": otp.Code}, http.StatusConflict, nil)
 }
 
 func TestApplicationIsPrivateToItsParties(t *testing.T) {
