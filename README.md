@@ -47,6 +47,7 @@ Comandos principais:
 |---|---|
 | `make test` | Executa os testes |
 | `make test-race` | Executa testes, detector de corrida e cobertura |
+| `make test-e2e` | Executa os testes ponta a ponta contra o PostgreSQL do Compose |
 | `make generate` | Regenera SQLC e o contrato OpenAPI |
 | `make lint` | Executa o golangci-lint |
 | `make check` | Executa geração, testes, lint e validação do OpenAPI |
@@ -56,6 +57,16 @@ Comandos principais:
 | `make docs-generate` | Gera `build/openapi.yaml` sem precisar de banco ou configuração |
 | `make docs-check` | Verifica se o YAML gerado está atualizado |
 | `make docs-validate` | Gera e valida o OpenAPI com Redocly |
+
+### Testes ponta a ponta
+
+`e2e/` percorre a API real por HTTP e WebSocket: cadastro e sessão, verificação de organizações, publicação de animais, candidatura, triagem, chat, agendamento com OTP até a adoção concluída e denúncias. Os testes ficam atrás da build tag `e2e`, então `make test` não os executa.
+
+```sh
+make test-e2e
+```
+
+O alvo sobe apenas o serviço `db` do Compose, recria o banco `petfinder_e2e` (o banco `petfinder` não é tocado), aplica as migrações e executa `go test -tags e2e ./e2e/...`. O servidor roda no próprio processo de teste, ligado a esse banco. Para usar outro banco já migrado, defina `E2E_DATABASE_URL` e rode `go test -tags e2e ./e2e/...`. Cada teste cria usuários, organizações e cidades únicos, de modo que podem rodar repetidamente sobre o mesmo banco.
 
 ## Configuração
 
