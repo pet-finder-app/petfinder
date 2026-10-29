@@ -2,10 +2,12 @@ SHELL := /bin/sh
 
 DATABASE_URL ?= postgres://petfinder:petfinder@localhost:5432/petfinder?sslmode=disable
 MIGRATIONS_DIR ?= db/migrations
+E2E_DATABASE ?= petfinder_e2e
+E2E_DATABASE_URL ?= postgres://petfinder:petfinder@localhost:5432/$(E2E_DATABASE)?sslmode=disable
 
 .DEFAULT_GOAL := help
 
-.PHONY: help run build test test-race lint generate fmt check migrate-up migrate-down migrate-create docker-up docker-down docker-logs docs-generate docs-check docs-validate
+.PHONY: help run build test test-race test-e2e lint generate fmt check migrate-up migrate-down migrate-create docker-up docker-down docker-logs docs-generate docs-check docs-validate
 
 help: ## Lista os comandos disponíveis
 	@awk 'BEGIN {FS = ":.*## "; printf "Uso: make <alvo>\n\n"} /^[a-zA-Z_-]+:.*## / {printf "  %-18s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -22,6 +24,12 @@ test: ## Executa os testes
 
 test-race: ## Executa os testes com detector de corrida
 	go test -race -coverprofile=coverage.out ./...
+
+test-e2e: ## Executa os testes ponta a ponta em um banco recriado do zero
+	docker compose up -d --wait db
+	docker compose exec -T db sh -c 'dropdb -U "$$POSTGRES_USER" --if-exists --force $(E2E_DATABASE) && createdb -U "$$POSTGRES_USER" $(E2E_DATABASE)'
+	$(MAKE) migrate-up DATABASE_URL="$(E2E_DATABASE_URL)"
+	E2E_DATABASE_URL="$(E2E_DATABASE_URL)" go test -tags e2e -count=1 ./e2e/...
 
 lint: ## Executa o golangci-lint instalado localmente
 	golangci-lint run ./...
