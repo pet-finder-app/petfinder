@@ -24,12 +24,14 @@ curl http://localhost:8080/health
 O Compose inicia o PostgreSQL, aplica `db/migrations` e só então inicia a API. O endpoint de saúde deve responder:
 
 ```json
-{"status":"ok"}
+{ "status": "ok" }
 ```
 
 Use `make docker-logs` para acompanhar a API e `make docker-down` para encerrar os containers sem apagar o volume do banco. O segredo JWT do exemplo serve apenas para desenvolvimento; troque-o em qualquer ambiente compartilhado.
 
 ## Desenvolvimento local
+
+Para publicar no GHCR e fazer deploy automático no VPS após as verificações de `main`, consulte [deploy/README.md](deploy/README.md).
 
 Para executar a API fora do container, instale Go 1.25, SQLC e golangci-lint. Mantenha apenas o banco no Docker:
 
@@ -43,20 +45,20 @@ make run
 
 Comandos principais:
 
-| Comando | Finalidade |
-|---|---|
-| `make test` | Executa os testes |
-| `make test-race` | Executa testes, detector de corrida e cobertura |
-| `make test-e2e` | Executa os testes ponta a ponta contra o PostgreSQL do Compose |
-| `make generate` | Regenera SQLC e o contrato OpenAPI |
-| `make lint` | Executa o golangci-lint |
-| `make check` | Executa geração, testes, lint e validação do OpenAPI |
-| `make build` | Gera `bin/petfinder` |
-| `make migrate-up` | Aplica migrações pendentes |
-| `make migrate-down` | Reverte a última migração |
+| Comando              | Finalidade                                                      |
+| -------------------- | --------------------------------------------------------------- |
+| `make test`          | Executa os testes                                               |
+| `make test-race`     | Executa testes, detector de corrida e cobertura                 |
+| `make test-e2e`      | Executa os testes ponta a ponta contra o PostgreSQL do Compose  |
+| `make generate`      | Regenera SQLC e o contrato OpenAPI                              |
+| `make lint`          | Executa o golangci-lint                                         |
+| `make check`         | Executa geração, testes, lint e validação do OpenAPI            |
+| `make build`         | Gera `bin/petfinder`                                            |
+| `make migrate-up`    | Aplica migrações pendentes                                      |
+| `make migrate-down`  | Reverte a última migração                                       |
 | `make docs-generate` | Gera `build/openapi.yaml` sem precisar de banco ou configuração |
-| `make docs-check` | Verifica se o YAML gerado está atualizado |
-| `make docs-validate` | Gera e valida o OpenAPI com Redocly |
+| `make docs-check`    | Verifica se o YAML gerado está atualizado                       |
+| `make docs-validate` | Gera e valida o OpenAPI com Redocly                             |
 
 ### Testes ponta a ponta
 
@@ -72,17 +74,17 @@ O alvo sobe apenas o serviço `db` do Compose, recria o banco `petfinder_e2e` (o
 
 A aplicação lê configuração exclusivamente do ambiente. Consulte [.env.example](.env.example) para um arquivo local completo.
 
-| Variável | Obrigatória | Padrão | Descrição |
-|---|---:|---|---|
-| `DATABASE_URL` | sim | — | URL PostgreSQL |
-| `JWT_SECRET` | sim | — | Segredo com no mínimo 32 bytes |
-| `HTTP_ADDR` | não | `:8080` | Endereço de escuta HTTP |
-| `APP_ENV` | não | `development` | Nome do ambiente |
-| `JWT_ISSUER` | não | `petfinder-api` | Emissor dos access tokens |
-| `JWT_AUDIENCE` | não | `petfinder` | Audiência dos access tokens |
-| `ACCESS_TOKEN_TTL` | não | `15m` | Duração do access token |
-| `REFRESH_TOKEN_TTL` | não | `720h` | Duração máxima da sessão renovável |
-| `SHUTDOWN_TIMEOUT` | não | `10s` | Prazo para encerramento gracioso |
+| Variável            | Obrigatória | Padrão          | Descrição                          |
+| ------------------- | ----------: | --------------- | ---------------------------------- |
+| `DATABASE_URL`      |         sim | —               | URL PostgreSQL                     |
+| `JWT_SECRET`        |         sim | —               | Segredo com no mínimo 32 bytes     |
+| `HTTP_ADDR`         |         não | `:8080`         | Endereço de escuta HTTP            |
+| `APP_ENV`           |         não | `development`   | Nome do ambiente                   |
+| `JWT_ISSUER`        |         não | `petfinder-api` | Emissor dos access tokens          |
+| `JWT_AUDIENCE`      |         não | `petfinder`     | Audiência dos access tokens        |
+| `ACCESS_TOKEN_TTL`  |         não | `15m`           | Duração do access token            |
+| `REFRESH_TOKEN_TTL` |         não | `720h`          | Duração máxima da sessão renovável |
+| `SHUTDOWN_TIMEOUT`  |         não | `10s`           | Prazo para encerramento gracioso   |
 
 Em produção, use TLS no proxy de entrada, um segredo aleatório vindo de um cofre, PostgreSQL com SSL e credenciais distintas das usadas localmente.
 
@@ -116,8 +118,13 @@ Access tokens duram 15 minutos. O refresh token é rotacionado a cada renovaçã
 `GET /v1/conversations/{conversationId}/ws` abre um WebSocket com o subprotocolo `petfinder.chat.v1` e aplica as mesmas regras de acesso das rotas de mensagens. Clientes nativos enviam o cabeçalho `Authorization`; navegadores, que não conseguem definir cabeçalhos no WebSocket, oferecem o token como um subprotocolo adicional:
 
 ```js
-const socket = new WebSocket(`wss://api.exemplo/v1/conversations/${id}/ws`, ["petfinder.chat.v1", `bearer.${accessToken}`]);
-socket.send(JSON.stringify({ type: "message.send", client_id: "local-1", body: "Olá!" }));
+const socket = new WebSocket(`wss://api.exemplo/v1/conversations/${id}/ws`, [
+  "petfinder.chat.v1",
+  `bearer.${accessToken}`,
+]);
+socket.send(
+  JSON.stringify({ type: "message.send", client_id: "local-1", body: "Olá!" }),
+);
 ```
 
 O servidor envia `message.ack` para quem enviou (com `client_id` e o eventual `warning` de moderação), `message.created` para as demais conexões da conversa e `error` com um objeto de problema quando um comando falha. Mensagens enviadas pela rota REST também são distribuídas. Cada envio é autorizado novamente, então conversas encerradas e vínculos revogados valem sem reconexão.

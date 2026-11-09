@@ -3,6 +3,10 @@
 .agents
 .codex
 .env
+.env.*
+.aws
+deploy
+e2e
 .idea
 .vscode
 bin
