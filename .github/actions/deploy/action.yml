@@ -1,0 +1,82 @@
+name: Deploy to VPS
+description: Pull a GHCR image and deploy the PostgreSQL and HTTP/WebSocket services over SSH.
+
+inputs:
+  host:
+    description: VPS hostname or IPv4 address
+    required: true
+  user:
+    description: SSH user with Docker access
+    required: true
+  port:
+    description: SSH port
+    default: "22"
+  deploy-path:
+    description: Absolute deployment directory containing the server .env file
+    required: true
+  ssh-key:
+    description: SSH private key for the deployment user
+    required: true
+  image:
+    description: GHCR image reference pinned by digest
+    required: true
+  revision:
+    description: Commit SHA used for the release directory
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Validate settings and deploy over SSH
+      shell: bash
+      working-directory: ${{ github.workspace }}
+      env:
+        VPS_HOST: ${{ inputs.host }}
+        VPS_USER: ${{ inputs.user }}
+        VPS_PORT: ${{ inputs.port }}
+        VPS_DEPLOY_PATH: ${{ inputs.deploy-path }}
+        VPS_SSH_KEY: ${{ inputs.ssh-key }}
+        API_IMAGE: ${{ inputs.image }}
+        DEPLOY_REVISION: ${{ inputs.revision }}
+      run: |
+        set -euo pipefail
+
+        missing=0
+        for setting in VPS_HOST VPS_USER VPS_DEPLOY_PATH VPS_SSH_KEY; do
+          if [[ -z "${!setting:-}" ]]; then
+            echo "::error::Missing $setting. Configure it under repository Settings > Secrets and variables > Actions, or in the production environment. Server .env values are not available to GitHub Actions."
+            missing=1
+          fi
+        done
+        if (( missing )); then
+          exit 1
+        fi
+
+        VPS_PORT=${VPS_PORT:-22}
+        invalid() {
+          echo "::error::Invalid $1. $2"
+          exit 1
+        }
+        # These values also become part of a remote shell command.
+        [[ "$VPS_HOST" =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]*$ ]] || invalid VPS_HOST "Use a hostname or IPv4 address without a protocol or port."
+        [[ "$VPS_USER" =~ ^[a-zA-Z_][a-zA-Z0-9_-]*$ ]] || invalid VPS_USER "Use an SSH username."
+        [[ "$VPS_PORT" =~ ^[0-9]{1,5}$ ]] || invalid VPS_PORT "Use a port from 1 to 65535."
+        (( 10#$VPS_PORT >= 1 && 10#$VPS_PORT <= 65535 )) || invalid VPS_PORT "Use a port from 1 to 65535."
+        [[ "$VPS_DEPLOY_PATH" =~ ^/[a-zA-Z0-9_./-]+$ && "$VPS_DEPLOY_PATH" != / ]] || invalid VPS_DEPLOY_PATH "Use an absolute directory without spaces, such as /opt/petfinder."
+        [[ "$DEPLOY_REVISION" =~ ^[a-f0-9]{40}$ ]] || invalid revision "Use the full commit SHA."
+        [[ "$API_IMAGE" =~ ^ghcr.io/[a-z0-9_./-]+@sha256:[a-f0-9]{64}$ ]] || invalid image "Use a GHCR image pinned by SHA256 digest."
+
+        ssh_dir=$(mktemp -d)
+        trap 'rm -rf "$ssh_dir"' EXIT
+        chmod 700 "$ssh_dir"
+        printf '%s\n' "$VPS_SSH_KEY" > "$ssh_dir/key"
+        chmod 600 "$ssh_dir/key"
+        # Trust the first connection and reject host-key changes during this deployment.
+        ssh_options=(-i "$ssh_dir/key" -p "$VPS_PORT" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -o "UserKnownHostsFile=$ssh_dir/known_hosts" -o ConnectTimeout=15)
+        destination="$VPS_USER@$VPS_HOST"
+        release_dir="$VPS_DEPLOY_PATH/releases/$DEPLOY_REVISION"
+
+        tar -czf - compose.production.yaml deploy/run.sh |
+          ssh "${ssh_options[@]}" "$destination" "mkdir -p '$release_dir' && tar -xzf - -C '$release_dir'"
+        ssh "${ssh_options[@]}" "$destination" \
+          "cd '$release_dir' && bash deploy/run.sh '$VPS_DEPLOY_PATH' '$API_IMAGE'"

@@ -18,6 +18,10 @@ Crie o environment `production` e configure os secrets e variables abaixo nele (
 
 O job de publicação usa `GITHUB_TOKEN` com `packages: write`; não é necessário um PAT para publicar. Caso o pacote GHCR já exista, dê a este repositório acesso de escrita nas configurações do pacote.
 
+O job de deploy usa a action local [`.github/actions/deploy`](../.github/actions/deploy/action.yml). `VPS_HOST`, `VPS_USER`, `VPS_PORT` e `VPS_DEPLOY_PATH` podem ser configurados como secrets ou variables; `VPS_SSH_KEY` deve ser um secret. Para host e usuário, secrets têm prioridade; para porta e diretório, variables têm prioridade.
+
+Se a action informar valores ausentes, confirme que os nomes estão exatos e foram configurados em **Settings > Secrets and variables > Actions** deste repositório, ou em **Settings > Environments > production**. Secrets de outro environment, de Dependabot ou de Codespaces não ficam disponíveis neste job. O `.env` do servidor configura a aplicação, mas não fornece credenciais ou parâmetros de conexão ao runner do GitHub. A action lista todos os parâmetros obrigatórios ausentes sem imprimir seus valores.
+
 O SSH usa `StrictHostKeyChecking=accept-new`: aceita automaticamente a chave do servidor na primeira conexão e rejeita alterações durante o mesmo deploy. O arquivo `known_hosts` é temporário e não persiste entre execuções; portanto, cada deploy confia novamente na primeira conexão, sem verificar previamente a identidade do VPS. Não é necessário configurar `VPS_KNOWN_HOSTS`.
 
 ## Preparação do VPS
