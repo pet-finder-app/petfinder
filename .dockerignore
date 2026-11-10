@@ -1,0 +1,17 @@
+.git
+.github
+.agents
+.codex
+.env
+.env.*
+.aws
+deploy
+e2e
+.idea
+.vscode
+bin
+coverage.*
+*.out
+*.test
+README.md
+docs
