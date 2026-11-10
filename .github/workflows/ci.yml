@@ -135,5 +135,4 @@ jobs:
           VPS_PORT: ${{ vars.VPS_PORT }}
           VPS_DEPLOY_PATH: ${{ vars.VPS_DEPLOY_PATH }}
           VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
-          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
         run: bash .github/scripts/deploy.sh

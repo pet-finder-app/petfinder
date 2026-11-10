@@ -5,7 +5,6 @@ set -euo pipefail
 : "${VPS_USER:?Set VPS_USER}"
 : "${VPS_DEPLOY_PATH:?Set VPS_DEPLOY_PATH}"
 : "${VPS_SSH_KEY:?Set VPS_SSH_KEY}"
-: "${VPS_KNOWN_HOSTS:?Set VPS_KNOWN_HOSTS}"
 : "${API_IMAGE:?Set API_IMAGE}"
 : "${GITHUB_SHA:?Set GITHUB_SHA}"
 VPS_PORT=${VPS_PORT:-22}
@@ -22,9 +21,9 @@ ssh_dir=$(mktemp -d)
 trap 'rm -rf "$ssh_dir"' EXIT
 chmod 700 "$ssh_dir"
 printf '%s\n' "$VPS_SSH_KEY" > "$ssh_dir/key"
-printf '%s\n' "$VPS_KNOWN_HOSTS" > "$ssh_dir/known_hosts"
-chmod 600 "$ssh_dir/key" "$ssh_dir/known_hosts"
-ssh_options=(-i "$ssh_dir/key" -p "$VPS_PORT" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$ssh_dir/known_hosts" -o ConnectTimeout=15)
+chmod 600 "$ssh_dir/key"
+# Trust the first connection and reject host-key changes during this deployment.
+ssh_options=(-i "$ssh_dir/key" -p "$VPS_PORT" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -o "UserKnownHostsFile=$ssh_dir/known_hosts" -o ConnectTimeout=15)
 destination="$VPS_USER@$VPS_HOST"
 release_dir="$VPS_DEPLOY_PATH/releases/$GITHUB_SHA"
 

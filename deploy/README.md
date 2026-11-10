@@ -13,11 +13,12 @@ Crie o environment `production` e configure os secrets e variables abaixo nele (
 | Secret | `VPS_HOST` | Hostname ou IPv4 do VPS |
 | Secret | `VPS_USER` | Usuário SSH com acesso ao Docker |
 | Secret | `VPS_SSH_KEY` | Chave privada SSH sem passphrase, dedicada ao deploy |
-| Secret | `VPS_KNOWN_HOSTS` | Linha(s) de `known_hosts` com a chave pública do host, verificada por um canal confiável; para porta diferente de 22, use `[host]:porta` |
 | Variable | `VPS_DEPLOY_PATH` | Diretório absoluto, por exemplo `/opt/petfinder`, sem espaços |
 | Variable | `VPS_PORT` | Porta SSH, opcional; padrão `22` |
 
 O job de publicação usa `GITHUB_TOKEN` com `packages: write`; não é necessário um PAT para publicar. Caso o pacote GHCR já exista, dê a este repositório acesso de escrita nas configurações do pacote.
+
+O SSH usa `StrictHostKeyChecking=accept-new`: aceita automaticamente a chave do servidor na primeira conexão e rejeita alterações durante o mesmo deploy. O arquivo `known_hosts` é temporário e não persiste entre execuções; portanto, cada deploy confia novamente na primeira conexão, sem verificar previamente a identidade do VPS. Não é necessário configurar `VPS_KNOWN_HOSTS`.
 
 ## Preparação do VPS
 
