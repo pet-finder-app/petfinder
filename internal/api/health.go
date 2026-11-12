@@ -18,6 +18,6 @@ func healthHandler(db pinger) http.HandlerFunc {
 			writeProblem(w, http.StatusServiceUnavailable, "Service unavailable", "database is not ready", nil)
 			return
 		}
-		writeJSON(w, http.StatusOK, healthResponse{Status: "ok"})
+		writeJSON(w, http.StatusOK, healthResponse{Status: "versao atualizada"})
 	}
 }
