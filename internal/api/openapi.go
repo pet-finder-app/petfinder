@@ -227,7 +227,8 @@ type applicationQuery struct {
 }
 
 type messagePaginationQuery struct {
-	PageSize int `json:"page_size,omitempty" minimum:"1" maximum:"100" default:"20" doc:"Returns the most recent messages, newest first."`
+	Before   string `json:"before,omitempty" format:"uuid" doc:"Return messages older than this message ID, exclusive. Must belong to this conversation."`
+	PageSize int    `json:"page_size,omitempty" minimum:"1" maximum:"100" default:"20" doc:"Returns the most recent messages, newest first."`
 }
 
 type inventoryQuery struct {

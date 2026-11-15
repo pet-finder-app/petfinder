@@ -373,7 +373,27 @@ func (s *Server) listMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_, size, page := pagination(r)
-	items, err := s.queries.ListConversationMessages(r.Context(), database.ListConversationMessagesParams{ConversationID: id, IncludeModerated: moderator, PageSize: size})
+	var before pgtype.UUID
+	if raw := r.URL.Query().Get("before"); raw != "" {
+		var valid bool
+		before, valid = pathUUIDValue(raw)
+		if !valid {
+			invalidPath(w)
+			return
+		}
+	}
+	if before.Valid {
+		valid, cursorErr := s.queries.IsVisibleMessageCursor(r.Context(), database.IsVisibleMessageCursorParams{ID: before, ConversationID: id, IncludeModerated: moderator})
+		if cursorErr != nil {
+			handleDBError(w, cursorErr)
+			return
+		}
+		if !valid {
+			writeProblem(w, http.StatusUnprocessableEntity, "Validation failed", "before must identify a visible message in this conversation", nil)
+			return
+		}
+	}
+	items, err := s.queries.ListMessagesBeforeCursor(r.Context(), database.ListMessagesBeforeCursorParams{ConversationID: id, IncludeModerated: moderator, PageSize: size, BeforeID: before})
 	if err != nil {
 		handleDBError(w, err)
 		return

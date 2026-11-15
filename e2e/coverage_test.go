@@ -3,6 +3,8 @@
 package e2e
 
 import (
+	"context"
+	"net/http"
 	"testing"
 	"time"
 )
@@ -135,4 +137,36 @@ func TestAppointmentLookup(t *testing.T) {
 	}
 	stranger.do("GET", path+"/appointments", nil, 403, nil)
 	stranger.do("GET", "/v1/appointments/"+appointment.ID, nil, 403, nil)
+}
+
+func TestMessageCursorWithEqualTimestamps(t *testing.T) {
+	s := newAdoptionSetup(t)
+	path := "/v1/conversations/" + s.conversationID + "/messages"
+	for _, body := range []string{"hello one", "hello two", "hello three"} {
+		s.adopter.do("POST", path, map[string]any{"body": body}, 201, nil)
+	}
+	// Deliberately force ties to exercise the UUID portion of the cursor.
+	if _, err := pool.Exec(context.Background(), "UPDATE messages SET created_at = now() WHERE conversation_id = $1", s.conversationID); err != nil {
+		t.Fatal(err)
+	}
+	var page struct {
+		Items []struct{ ID string } `json:"items"`
+	}
+	s.adopter.do("GET", path+"?page_size=2", nil, 200, &page)
+	if len(page.Items) != 2 {
+		t.Fatal("invalid first page")
+	}
+	first, second := page.Items[0].ID, page.Items[1].ID
+	s.adopter.do("GET", path+"?page_size=2&before="+second, nil, 200, &page)
+	if len(page.Items) != 1 || page.Items[0].ID == first || page.Items[0].ID == second {
+		t.Fatalf("invalid cursor page: %+v", page)
+	}
+	s.adopter.do("GET", path+"?before=bad", nil, http.StatusBadRequest, nil)
+	registerUser(t).do("GET", path, nil, 403, nil)
+	other := newAdoptionSetup(t)
+	var message struct {
+		Message struct{ ID string } `json:"message"`
+	}
+	other.adopter.do("POST", "/v1/conversations/"+other.conversationID+"/messages", map[string]any{"body": "hello"}, 201, &message)
+	s.adopter.do("GET", path+"?before="+message.Message.ID, nil, 422, nil)
 }

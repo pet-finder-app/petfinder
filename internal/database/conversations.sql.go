@@ -207,6 +207,28 @@ func (q *Queries) GetConversationByID(ctx context.Context, id pgtype.UUID) (Conv
 	return i, err
 }
 
+const isVisibleMessageCursor = `-- name: IsVisibleMessageCursor :one
+SELECT EXISTS (
+ SELECT 1 FROM messages WHERE id = $1
+ AND conversation_id = $2
+ AND deleted_at IS NULL
+ AND ($3::boolean OR moderation_status IN ('visible', 'flagged'))
+)::boolean AS valid
+`
+
+type IsVisibleMessageCursorParams struct {
+	ID               pgtype.UUID `db:"id" json:"id"`
+	ConversationID   pgtype.UUID `db:"conversation_id" json:"conversation_id"`
+	IncludeModerated bool        `db:"include_moderated" json:"include_moderated"`
+}
+
+func (q *Queries) IsVisibleMessageCursor(ctx context.Context, arg IsVisibleMessageCursorParams) (bool, error) {
+	row := q.db.QueryRow(ctx, isVisibleMessageCursor, arg.ID, arg.ConversationID, arg.IncludeModerated)
+	var valid bool
+	err := row.Scan(&valid)
+	return valid, err
+}
+
 const listApplicationConversations = `-- name: ListApplicationConversations :many
 SELECT id, organization_id, kind, animal_id, application_id, counterparty_user_id, status, closed_by, closed_at, created_at, updated_at FROM conversations
 WHERE application_id = $1
@@ -266,6 +288,63 @@ func (q *Queries) ListConversationMessages(ctx context.Context, arg ListConversa
 		arg.ConversationID,
 		arg.IncludeModerated,
 		arg.BeforeCreatedAt,
+		arg.PageSize,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Message{}
+	for rows.Next() {
+		var i Message
+		if err := rows.Scan(
+			&i.ID,
+			&i.ConversationID,
+			&i.SenderID,
+			&i.Body,
+			&i.ModerationStatus,
+			&i.ModerationReason,
+			&i.ModeratedBy,
+			&i.ModeratedAt,
+			&i.EditedAt,
+			&i.DeletedAt,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMessagesBeforeCursor = `-- name: ListMessagesBeforeCursor :many
+SELECT m.id, m.conversation_id, m.sender_id, m.body, m.moderation_status, m.moderation_reason, m.moderated_by, m.moderated_at, m.edited_at, m.deleted_at, m.created_at FROM messages m
+WHERE m.conversation_id = $1
+  AND m.deleted_at IS NULL
+  AND ($2::boolean OR m.moderation_status IN ('visible', 'flagged'))
+  AND ($3::uuid IS NULL OR (m.created_at, m.id) < (
+    SELECT c.created_at, c.id FROM messages c
+    WHERE c.id = $3 AND c.conversation_id = $1
+  ))
+ORDER BY m.created_at DESC, m.id DESC
+LIMIT $4::int
+`
+
+type ListMessagesBeforeCursorParams struct {
+	ConversationID   pgtype.UUID `db:"conversation_id" json:"conversation_id"`
+	IncludeModerated bool        `db:"include_moderated" json:"include_moderated"`
+	BeforeID         pgtype.UUID `db:"before_id" json:"before_id"`
+	PageSize         int32       `db:"page_size" json:"page_size"`
+}
+
+func (q *Queries) ListMessagesBeforeCursor(ctx context.Context, arg ListMessagesBeforeCursorParams) ([]Message, error) {
+	rows, err := q.db.Query(ctx, listMessagesBeforeCursor,
+		arg.ConversationID,
+		arg.IncludeModerated,
+		arg.BeforeID,
 		arg.PageSize,
 	)
 	if err != nil {

@@ -63,6 +63,7 @@ type Querier interface {
 	GrantUserRole(ctx context.Context, arg GrantUserRoleParams) error
 	IncrementAppointmentOTPFailure(ctx context.Context, id pgtype.UUID) (int64, error)
 	InviteOrganizationMember(ctx context.Context, arg InviteOrganizationMemberParams) (OrganizationMember, error)
+	IsVisibleMessageCursor(ctx context.Context, arg IsVisibleMessageCursorParams) (bool, error)
 	ListActorAuditLog(ctx context.Context, arg ListActorAuditLogParams) ([]AuditLog, error)
 	ListAdopterApplications(ctx context.Context, arg ListAdopterApplicationsParams) ([]ListAdopterApplicationsRow, error)
 	ListAnimalImages(ctx context.Context, arg ListAnimalImagesParams) ([]AnimalImage, error)
@@ -76,6 +77,7 @@ type Querier interface {
 	ListConversationMessages(ctx context.Context, arg ListConversationMessagesParams) ([]Message, error)
 	ListEntityAuditLog(ctx context.Context, arg ListEntityAuditLogParams) ([]AuditLog, error)
 	ListMemberOrganizations(ctx context.Context, arg ListMemberOrganizationsParams) ([]ListMemberOrganizationsRow, error)
+	ListMessagesBeforeCursor(ctx context.Context, arg ListMessagesBeforeCursorParams) ([]Message, error)
 	ListOpenReports(ctx context.Context, arg ListOpenReportsParams) ([]ListOpenReportsRow, error)
 	ListOrganizationApplications(ctx context.Context, arg ListOrganizationApplicationsParams) ([]ListOrganizationApplicationsRow, error)
 	ListOrganizationConversations(ctx context.Context, arg ListOrganizationConversationsParams) ([]ListOrganizationConversationsRow, error)
