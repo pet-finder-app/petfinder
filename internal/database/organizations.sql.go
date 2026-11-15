@@ -322,6 +322,74 @@ func (q *Queries) InviteOrganizationMember(ctx context.Context, arg InviteOrgani
 	return i, err
 }
 
+const listMemberOrganizations = `-- name: ListMemberOrganizations :many
+SELECT o.id, o.legal_name, o.display_name, o.slug, o.registration_number, o.description, o.official_email, o.official_phone, o.website_url, o.city, o.state_code, o.country_code, o.latitude, o.longitude, o.verification_status, o.verification_notes, o.verified_by, o.verified_at, o.deactivated_at, o.created_by, o.created_at, o.updated_at, om.status AS membership_status, om.member_role
+FROM organizations o
+JOIN organization_members om ON om.organization_id = o.id
+WHERE om.user_id = $1
+  AND om.status IN ('invited', 'active')
+  AND o.deactivated_at IS NULL
+ORDER BY o.display_name, o.id
+LIMIT $3::int OFFSET $2::int
+`
+
+type ListMemberOrganizationsParams struct {
+	UserID     pgtype.UUID `db:"user_id" json:"user_id"`
+	PageOffset int32       `db:"page_offset" json:"page_offset"`
+	PageSize   int32       `db:"page_size" json:"page_size"`
+}
+
+type ListMemberOrganizationsRow struct {
+	Organization     Organization `db:"organization" json:"organization"`
+	MembershipStatus string       `db:"membership_status" json:"membership_status"`
+	MemberRole       string       `db:"member_role" json:"member_role"`
+}
+
+func (q *Queries) ListMemberOrganizations(ctx context.Context, arg ListMemberOrganizationsParams) ([]ListMemberOrganizationsRow, error) {
+	rows, err := q.db.Query(ctx, listMemberOrganizations, arg.UserID, arg.PageOffset, arg.PageSize)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListMemberOrganizationsRow{}
+	for rows.Next() {
+		var i ListMemberOrganizationsRow
+		if err := rows.Scan(
+			&i.Organization.ID,
+			&i.Organization.LegalName,
+			&i.Organization.DisplayName,
+			&i.Organization.Slug,
+			&i.Organization.RegistrationNumber,
+			&i.Organization.Description,
+			&i.Organization.OfficialEmail,
+			&i.Organization.OfficialPhone,
+			&i.Organization.WebsiteUrl,
+			&i.Organization.City,
+			&i.Organization.StateCode,
+			&i.Organization.CountryCode,
+			&i.Organization.Latitude,
+			&i.Organization.Longitude,
+			&i.Organization.VerificationStatus,
+			&i.Organization.VerificationNotes,
+			&i.Organization.VerifiedBy,
+			&i.Organization.VerifiedAt,
+			&i.Organization.DeactivatedAt,
+			&i.Organization.CreatedBy,
+			&i.Organization.CreatedAt,
+			&i.Organization.UpdatedAt,
+			&i.MembershipStatus,
+			&i.MemberRole,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listOrganizationMembers = `-- name: ListOrganizationMembers :many
 SELECT om.id, om.organization_id, om.user_id, om.member_role, om.status, om.can_manage_members, om.can_publish_animals, om.can_manage_applications, om.invited_by, om.joined_at, om.deactivated_at, om.created_at, om.updated_at, u.display_name, u.email
 FROM organization_members om

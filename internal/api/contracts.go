@@ -289,3 +289,10 @@ type issuedOTPResponse struct {
 	Code      string    `json:"code" pattern:"^[0-9]{6}$"`
 	ExpiresAt time.Time `json:"expires_at"`
 }
+
+// Membership status is separate from the organization's verification decision.
+type memberOrganizationResponse struct {
+	Organization     organizationResponse `json:"organization"`
+	MembershipStatus string               `json:"membership_status" enum:"active,invited"`
+	MemberRole       string               `json:"member_role"`
+}

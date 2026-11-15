@@ -73,6 +73,7 @@ type Querier interface {
 	ListAvailableAnimals(ctx context.Context, arg ListAvailableAnimalsParams) ([]ListAvailableAnimalsRow, error)
 	ListConversationMessages(ctx context.Context, arg ListConversationMessagesParams) ([]Message, error)
 	ListEntityAuditLog(ctx context.Context, arg ListEntityAuditLogParams) ([]AuditLog, error)
+	ListMemberOrganizations(ctx context.Context, arg ListMemberOrganizationsParams) ([]ListMemberOrganizationsRow, error)
 	ListOpenReports(ctx context.Context, arg ListOpenReportsParams) ([]ListOpenReportsRow, error)
 	ListOrganizationApplications(ctx context.Context, arg ListOrganizationApplicationsParams) ([]ListOrganizationApplicationsRow, error)
 	ListOrganizationConversations(ctx context.Context, arg ListOrganizationConversationsParams) ([]ListOrganizationConversationsRow, error)

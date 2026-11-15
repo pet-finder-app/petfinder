@@ -51,5 +51,9 @@ func registerRoutes(s *Server, mux *http.ServeMux) *huma.OpenAPI {
 	registerRoute[reportRequest, database.Report](reg, http.MethodPost, "/v1/reports", "createReport", "Report suspicious adoption activity", "Reports", 201, s.protected(s.createReport), bearerAuth(false))
 	registerRoute[noBody, database.Report](reg, http.MethodGet, "/v1/reports/{reportId}", "getReport", "Get a moderation report", "Reports", 200, s.protected(s.getReport), bearerAuth(false))
 	registerRoute[updateReportRequest, database.Report](reg, http.MethodPatch, "/v1/reports/{reportId}", "updateReport", "Investigate or resolve a report", "Reports", 200, s.protected(s.updateReport), bearerAuth(false))
+
+	registerRoute[noBody, collectionResponse[memberOrganizationResponse]](reg, http.MethodGet, "/v1/me/organizations", "listMyOrganizations", "List your active and invited organization memberships", "Profile", 200, s.protected(s.listMyOrganizations), bearerAuth(false), queryParameters[paginationQuery])
+	registerRoute[noBody, collectionResponse[database.Animal]](reg, http.MethodGet, "/v1/me/animals", "listMyAnimals", "List animals you submitted", "Animals", 200, s.protected(s.listMyAnimals), bearerAuth(false), queryParameters[paginationQuery])
+	registerRoute[noBody, collectionResponse[database.Animal]](reg, http.MethodGet, "/v1/organizations/{organizationId}/animals", "listOrganizationAnimals", "List organization animal inventory", "Animals", 200, s.protected(s.listOrganizationAnimals), bearerAuth(false), queryParameters[paginationQuery], queryParameters[inventoryQuery])
 	return reg.spec
 }

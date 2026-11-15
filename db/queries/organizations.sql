@@ -108,3 +108,13 @@ JOIN users u ON u.id = om.user_id
 WHERE om.organization_id = sqlc.arg(organization_id)
   AND (sqlc.narg(status)::text IS NULL OR om.status = sqlc.narg(status))
 ORDER BY om.created_at, om.id;
+
+-- name: ListMemberOrganizations :many
+SELECT sqlc.embed(o), om.status AS membership_status, om.member_role
+FROM organizations o
+JOIN organization_members om ON om.organization_id = o.id
+WHERE om.user_id = sqlc.arg(user_id)
+  AND om.status IN ('invited', 'active')
+  AND o.deactivated_at IS NULL
+ORDER BY o.display_name, o.id
+LIMIT sqlc.arg(page_size)::int OFFSET sqlc.arg(page_offset)::int;

@@ -229,3 +229,7 @@ type applicationQuery struct {
 type messagePaginationQuery struct {
 	PageSize int `json:"page_size,omitempty" minimum:"1" maximum:"100" default:"20" doc:"Returns the most recent messages, newest first."`
 }
+
+type inventoryQuery struct {
+	Status string `json:"status,omitempty" enum:"pending_organization,available,adoption_in_progress,adopted,unavailable,under_review"`
+}
