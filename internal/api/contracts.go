@@ -275,9 +275,10 @@ type applicationCreatedResponse struct {
 }
 
 type applicationDetailResponse struct {
-	Application database.GetAdoptionApplicationByIDRow `json:"application"`
-	History     []database.ApplicationStatusHistory    `json:"history"`
-	Screening   *database.ApplicationScreening         `json:"screening,omitempty"`
+	Conversations []database.Conversation                `json:"conversations"`
+	Application   database.GetAdoptionApplicationByIDRow `json:"application"`
+	History       []database.ApplicationStatusHistory    `json:"history"`
+	Screening     *database.ApplicationScreening         `json:"screening,omitempty"`
 }
 
 type messageResponse struct {
@@ -300,6 +301,10 @@ type memberOrganizationResponse struct {
 type appointmentDetailResponse struct {
 	Appointment   database.Appointment               `json:"appointment"`
 	Confirmations []database.AppointmentConfirmation `json:"confirmations"`
+}
+
+type withdrawalRequest struct {
+	Reason string `json:"reason" minLength:"5" maxLength:"2000"`
 }
 
 type appointmentListResponse struct {

@@ -130,3 +130,6 @@ RETURNING *;
 SELECT * FROM post_adoption_followups
 WHERE application_id = sqlc.arg(application_id)
 ORDER BY occurred_at DESC, id;
+
+-- name: LockAdoptionApplication :one
+SELECT id FROM adoption_applications WHERE id = sqlc.arg(id) FOR UPDATE;

@@ -43,6 +43,21 @@ func (q *Queries) CloseConversation(ctx context.Context, arg CloseConversationPa
 	return i, err
 }
 
+const closeWithdrawnApplicationConversations = `-- name: CloseWithdrawnApplicationConversations :exec
+UPDATE conversations SET status = 'closed', closed_by = $1, closed_at = now()
+WHERE application_id = $2 AND status = 'open'
+`
+
+type CloseWithdrawnApplicationConversationsParams struct {
+	ActorID       pgtype.UUID `db:"actor_id" json:"actor_id"`
+	ApplicationID pgtype.UUID `db:"application_id" json:"application_id"`
+}
+
+func (q *Queries) CloseWithdrawnApplicationConversations(ctx context.Context, arg CloseWithdrawnApplicationConversationsParams) error {
+	_, err := q.db.Exec(ctx, closeWithdrawnApplicationConversations, arg.ActorID, arg.ApplicationID)
+	return err
+}
+
 const createAdopterConversation = `-- name: CreateAdopterConversation :one
 INSERT INTO conversations (
     organization_id, kind, animal_id, application_id, counterparty_user_id
@@ -190,6 +205,44 @@ func (q *Queries) GetConversationByID(ctx context.Context, id pgtype.UUID) (Conv
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const listApplicationConversations = `-- name: ListApplicationConversations :many
+SELECT id, organization_id, kind, animal_id, application_id, counterparty_user_id, status, closed_by, closed_at, created_at, updated_at FROM conversations
+WHERE application_id = $1
+ORDER BY created_at, id
+`
+
+func (q *Queries) ListApplicationConversations(ctx context.Context, applicationID pgtype.UUID) ([]Conversation, error) {
+	rows, err := q.db.Query(ctx, listApplicationConversations, applicationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Conversation{}
+	for rows.Next() {
+		var i Conversation
+		if err := rows.Scan(
+			&i.ID,
+			&i.OrganizationID,
+			&i.Kind,
+			&i.AnimalID,
+			&i.ApplicationID,
+			&i.CounterpartyUserID,
+			&i.Status,
+			&i.ClosedBy,
+			&i.ClosedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listConversationMessages = `-- name: ListConversationMessages :many

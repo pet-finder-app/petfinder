@@ -492,6 +492,17 @@ func (q *Queries) ListPostAdoptionFollowups(ctx context.Context, applicationID p
 	return items, nil
 }
 
+const lockAdoptionApplication = `-- name: LockAdoptionApplication :one
+SELECT id FROM adoption_applications WHERE id = $1 FOR UPDATE
+`
+
+func (q *Queries) LockAdoptionApplication(ctx context.Context, id pgtype.UUID) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, lockAdoptionApplication, id)
+	var id_2 pgtype.UUID
+	err := row.Scan(&id_2)
+	return id_2, err
+}
+
 const reviewApplicationScreening = `-- name: ReviewApplicationScreening :one
 UPDATE application_screenings
 SET status = 'reviewed', reviewed_by = $1, reviewed_at = now(),

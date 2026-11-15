@@ -127,7 +127,19 @@ func (s *Server) getApplication(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	screening, screeningErr := s.queries.GetLatestApplicationScreening(r.Context(), id)
-	response := applicationDetailResponse{Application: application, History: history}
+	conversations, err := s.queries.ListApplicationConversations(r.Context(), id)
+	if err != nil {
+		handleDBError(w, err)
+		return
+	}
+	// Keep the normal conversation visibility boundary even for future channels.
+	visible := make([]database.Conversation, 0, len(conversations))
+	for _, conversation := range conversations {
+		if allowed, _ := s.conversationAllowed(r, conversation); allowed {
+			visible = append(visible, conversation)
+		}
+	}
+	response := applicationDetailResponse{Application: application, History: history, Conversations: visible}
 	if screeningErr == nil {
 		response.Screening = &screening
 	} else if screeningErr != pgx.ErrNoRows {
@@ -177,6 +189,21 @@ func (s *Server) submitScreening(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rollbackTransaction(r.Context(), tx)
 	q := database.New(tx)
+	if _, err = q.LockAdoptionApplication(r.Context(), id); err != nil {
+		handleDBError(w, err)
+		return
+	}
+	application, err = q.GetAdoptionApplicationByID(r.Context(), id)
+	if err != nil {
+		handleDBError(w, err)
+		return
+	}
+	switch domain.ApplicationStatus(application.Status) {
+	case domain.ApplicationPending, domain.ApplicationScreening, domain.ApplicationMoreInfo:
+	default:
+		writeServiceError(w, ErrConflict)
+		return
+	}
 	screening, err := q.GetLatestApplicationScreening(r.Context(), id)
 	if err == pgx.ErrNoRows {
 		questions := []byte(`["housing","household","experience","care_plan","has_other_animals","accepts_follow_up"]`)
@@ -249,6 +276,20 @@ func (s *Server) decideApplication(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rollbackTransaction(r.Context(), tx)
 	q := database.New(tx)
+	// Serialize decisions with withdrawals and validate against the locked state.
+	if _, err = database.New(tx).LockAdoptionApplication(r.Context(), id); err != nil {
+		handleDBError(w, err)
+		return
+	}
+	application, err = q.GetAdoptionApplicationByID(r.Context(), id)
+	if err != nil {
+		handleDBError(w, err)
+		return
+	}
+	if err = domain.ValidateApplicationTransition(domain.ApplicationStatus(application.Status), domain.ApplicationStatus(to)); err != nil {
+		writeServiceError(w, ErrConflict)
+		return
+	}
 	updated, err := q.SetApplicationStatus(r.Context(), database.SetApplicationStatusParams{Status: to, Reason: &reason, ActorID: actor, ID: id, OrganizationID: application.OrganizationID})
 	if err != nil {
 		handleDBError(w, err)

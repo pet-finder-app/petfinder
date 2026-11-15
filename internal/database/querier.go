@@ -18,6 +18,7 @@ type Querier interface {
 	AssignReport(ctx context.Context, arg AssignReportParams) (Report, error)
 	CancelAppointment(ctx context.Context, arg CancelAppointmentParams) (Appointment, error)
 	CloseConversation(ctx context.Context, arg CloseConversationParams) (Conversation, error)
+	CloseWithdrawnApplicationConversations(ctx context.Context, arg CloseWithdrawnApplicationConversationsParams) error
 	CompleteAppointment(ctx context.Context, id pgtype.UUID) (Appointment, error)
 	ConsumeAppointmentOTP(ctx context.Context, id pgtype.UUID) (int64, error)
 	ConsumePasswordResetToken(ctx context.Context, id pgtype.UUID) (int64, error)
@@ -68,6 +69,7 @@ type Querier interface {
 	ListAnimalsByOrganization(ctx context.Context, arg ListAnimalsByOrganizationParams) ([]Animal, error)
 	ListAnimalsBySubmitter(ctx context.Context, arg ListAnimalsBySubmitterParams) ([]Animal, error)
 	ListApplicationAppointments(ctx context.Context, applicationID pgtype.UUID) ([]Appointment, error)
+	ListApplicationConversations(ctx context.Context, applicationID pgtype.UUID) ([]Conversation, error)
 	ListApplicationStatusHistory(ctx context.Context, applicationID pgtype.UUID) ([]ApplicationStatusHistory, error)
 	ListAppointmentConfirmations(ctx context.Context, appointmentID pgtype.UUID) ([]AppointmentConfirmation, error)
 	ListAvailableAnimals(ctx context.Context, arg ListAvailableAnimalsParams) ([]ListAvailableAnimalsRow, error)
@@ -84,6 +86,7 @@ type Querier interface {
 	ListUserConversations(ctx context.Context, arg ListUserConversationsParams) ([]ListUserConversationsRow, error)
 	ListUserRoles(ctx context.Context, userID pgtype.UUID) ([]Role, error)
 	ListVerifiedOrganizations(ctx context.Context, arg ListVerifiedOrganizationsParams) ([]Organization, error)
+	LockAdoptionApplication(ctx context.Context, id pgtype.UUID) (pgtype.UUID, error)
 	MarkUserEmailVerified(ctx context.Context, id pgtype.UUID) (User, error)
 	ModerateAnimalImage(ctx context.Context, arg ModerateAnimalImageParams) (AnimalImage, error)
 	ModerateMessage(ctx context.Context, arg ModerateMessageParams) (Message, error)

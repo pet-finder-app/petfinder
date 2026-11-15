@@ -78,6 +78,38 @@ func TestClearPreferenceRestoresDiscovery(t *testing.T) {
 	}{})
 }
 
+func TestApplicationWithdrawalAndConversationLookup(t *testing.T) {
+	s := newAdoptionSetup(t)
+	stranger := registerUser(t)
+	path := "/v1/applications/" + s.applicationID
+	var detail struct {
+		Conversations []struct{ ID string } `json:"conversations"`
+		History       []struct {
+			ToStatus string `json:"to_status"`
+		} `json:"history"`
+	}
+	s.adopter.do("GET", path, nil, 200, &detail)
+	if len(detail.Conversations) != 1 || detail.Conversations[0].ID != s.conversationID {
+		t.Fatalf("conversation reference missing: %+v", detail)
+	}
+	stranger.do("GET", path, nil, 403, nil)
+	request := map[string]any{"reason": "My circumstances changed"}
+	s.owner.do("POST", path+"/withdrawal", request, 403, nil)
+	s.adopter.do("POST", path+"/withdrawal", map[string]any{"reason": " "}, 422, nil)
+	s.adopter.do("POST", path+"/withdrawal", request, 200, nil)
+	s.adopter.do("POST", path+"/withdrawal", request, 409, nil)
+	s.adopter.do("PUT", path+"/screening", map[string]any{"housing": "House", "household": "Two adults", "experience": "Previous pets", "care_plan": "Regular veterinary care and daily walks"}, 409, nil)
+	s.owner.do("POST", path+"/decision", map[string]any{"decision": "approved", "reason": "Suitable adopter"}, 409, nil)
+	s.adopter.do("GET", path, nil, 200, &detail)
+	if detail.History[len(detail.History)-1].ToStatus != "withdrawn" {
+		t.Fatal("withdrawal history missing")
+	}
+	s.adopter.do("POST", "/v1/conversations/"+s.conversationID+"/messages", map[string]any{"body": "message"}, 403, nil)
+	approved := newAdoptionSetup(t)
+	approved.owner.do("POST", "/v1/applications/"+approved.applicationID+"/decision", map[string]any{"decision": "approved", "reason": "Suitable adopter"}, 200, nil)
+	approved.adopter.do("POST", "/v1/applications/"+approved.applicationID+"/withdrawal", request, 409, nil)
+}
+
 func TestAppointmentLookup(t *testing.T) {
 	s := newAdoptionSetup(t)
 	stranger := registerUser(t)

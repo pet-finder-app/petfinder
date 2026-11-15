@@ -97,3 +97,12 @@ RETURNING *;
 UPDATE messages
 SET deleted_at = now()
 WHERE id = sqlc.arg(id) AND sender_id = sqlc.arg(sender_id) AND deleted_at IS NULL;
+
+-- name: ListApplicationConversations :many
+SELECT * FROM conversations
+WHERE application_id = sqlc.arg(application_id)
+ORDER BY created_at, id;
+
+-- name: CloseWithdrawnApplicationConversations :exec
+UPDATE conversations SET status = 'closed', closed_by = sqlc.arg(actor_id), closed_at = now()
+WHERE application_id = sqlc.arg(application_id) AND status = 'open';
