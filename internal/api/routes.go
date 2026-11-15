@@ -55,5 +55,6 @@ func registerRoutes(s *Server, mux *http.ServeMux) *huma.OpenAPI {
 	registerRoute[noBody, collectionResponse[memberOrganizationResponse]](reg, http.MethodGet, "/v1/me/organizations", "listMyOrganizations", "List your active and invited organization memberships", "Profile", 200, s.protected(s.listMyOrganizations), bearerAuth(false), queryParameters[paginationQuery])
 	registerRoute[noBody, collectionResponse[database.Animal]](reg, http.MethodGet, "/v1/me/animals", "listMyAnimals", "List animals you submitted", "Animals", 200, s.protected(s.listMyAnimals), bearerAuth(false), queryParameters[paginationQuery])
 	registerRoute[noBody, collectionResponse[database.Animal]](reg, http.MethodGet, "/v1/organizations/{organizationId}/animals", "listOrganizationAnimals", "List organization animal inventory", "Animals", 200, s.protected(s.listOrganizationAnimals), bearerAuth(false), queryParameters[paginationQuery], queryParameters[inventoryQuery])
+	registerRoute[noBody, noBody](reg, http.MethodDelete, "/v1/animals/{animalId}/preference", "clearAnimalPreference", "Clear your like or dismissal", "Preferences", 204, s.protected(s.clearPreference), bearerAuth(false))
 	return reg.spec
 }

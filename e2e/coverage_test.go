@@ -55,3 +55,24 @@ func TestMembershipAndInventoryDiscovery(t *testing.T) {
 	}
 	client{t: t}.do("GET", "/v1/me/organizations", nil, 401, nil)
 }
+
+func TestClearPreferenceRestoresDiscovery(t *testing.T) {
+	s := newAdoptionSetup(t)
+	path := "/v1/animals/" + s.animal.ID + "/preference"
+	s.adopter.do("PUT", path, map[string]any{"value": "not_interested"}, 200, nil)
+	if len(discover(s.adopter.client, s.city)) != 0 {
+		t.Fatal("dismissal ignored")
+	}
+	s.owner.do("DELETE", path, nil, 204, nil)
+	if len(discover(s.adopter.client, s.city)) != 0 {
+		t.Fatal("other user cleared dismissal")
+	}
+	s.adopter.do("DELETE", path, nil, 204, nil)
+	s.adopter.do("DELETE", path, nil, 204, nil)
+	if len(discover(s.adopter.client, s.city)) != 1 {
+		t.Fatal("clear did not restore discovery")
+	}
+	s.adopter.do("GET", "/v1/preferences", nil, 200, &struct {
+		Items []animal `json:"items"`
+	}{})
+}

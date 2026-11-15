@@ -67,3 +67,18 @@ func (s *Server) listOrganizationAnimals(w http.ResponseWriter, r *http.Request)
 	page.Total = len(items)
 	writeJSON(w, http.StatusOK, collectionResponse[database.Animal]{Items: items, Page: page})
 }
+
+func (s *Server) clearPreference(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathUUID(r, "animalId")
+	if !ok {
+		invalidPath(w)
+		return
+	}
+	actor, _ := subjectUUID(r)
+	// Idempotent and scoped to the actor, even if the animal was removed.
+	if _, err := s.queries.DeleteAnimalPreference(r.Context(), database.DeleteAnimalPreferenceParams{UserID: actor, AnimalID: id}); err != nil {
+		handleDBError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
