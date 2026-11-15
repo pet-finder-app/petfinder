@@ -296,3 +296,12 @@ type memberOrganizationResponse struct {
 	MembershipStatus string               `json:"membership_status" enum:"active,invited"`
 	MemberRole       string               `json:"member_role"`
 }
+
+type appointmentDetailResponse struct {
+	Appointment   database.Appointment               `json:"appointment"`
+	Confirmations []database.AppointmentConfirmation `json:"confirmations"`
+}
+
+type appointmentListResponse struct {
+	Items []database.Appointment `json:"items"`
+}

@@ -82,3 +82,54 @@ func (s *Server) clearPreference(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
+
+func (s *Server) listApplicationAppointments(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathUUID(r, "applicationId")
+	if !ok {
+		invalidPath(w)
+		return
+	}
+	application, err := s.queries.GetAdoptionApplicationByID(r.Context(), id)
+	if err != nil {
+		handleDBError(w, err)
+		return
+	}
+	if !s.applicationAccess(r, application, false) {
+		writeServiceError(w, ErrForbidden)
+		return
+	}
+	items, err := s.queries.ListApplicationAppointments(r.Context(), id)
+	if err != nil {
+		handleDBError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, appointmentListResponse{Items: items})
+}
+
+func (s *Server) getAppointment(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathUUID(r, "appointmentId")
+	if !ok {
+		invalidPath(w)
+		return
+	}
+	appointment, err := s.queries.GetAppointmentByID(r.Context(), id)
+	if err != nil {
+		handleDBError(w, err)
+		return
+	}
+	application, err := s.queries.GetAdoptionApplicationByID(r.Context(), appointment.ApplicationID)
+	if err != nil {
+		handleDBError(w, err)
+		return
+	}
+	if !s.applicationAccess(r, application, false) {
+		writeServiceError(w, ErrForbidden)
+		return
+	}
+	confirmations, err := s.queries.ListAppointmentConfirmations(r.Context(), id)
+	if err != nil {
+		handleDBError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, appointmentDetailResponse{Appointment: appointment, Confirmations: confirmations})
+}

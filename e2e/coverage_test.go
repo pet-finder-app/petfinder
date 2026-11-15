@@ -4,6 +4,7 @@ package e2e
 
 import (
 	"testing"
+	"time"
 )
 
 func TestMembershipAndInventoryDiscovery(t *testing.T) {
@@ -75,4 +76,31 @@ func TestClearPreferenceRestoresDiscovery(t *testing.T) {
 	s.adopter.do("GET", "/v1/preferences", nil, 200, &struct {
 		Items []animal `json:"items"`
 	}{})
+}
+
+func TestAppointmentLookup(t *testing.T) {
+	s := newAdoptionSetup(t)
+	stranger := registerUser(t)
+	path := "/v1/applications/" + s.applicationID
+	s.owner.do("POST", path+"/decision", map[string]any{"decision": "approved", "reason": "Suitable adopter"}, 200, nil)
+	start := time.Now().Add(48 * time.Hour).UTC()
+	var appointment struct{ ID string }
+	s.owner.do("POST", path+"/appointments", map[string]any{"purpose": "delivery", "starts_at": start, "ends_at": start.Add(time.Hour), "timezone": "America/Recife", "location_name": "Shelter", "address": "Main Street 123"}, 201, &appointment)
+	var list struct {
+		Items []struct{ ID string } `json:"items"`
+	}
+	s.adopter.do("GET", path+"/appointments", nil, 200, &list)
+	if len(list.Items) != 1 || list.Items[0].ID != appointment.ID {
+		t.Fatal("appointment listing missing appointment")
+	}
+	var detail struct {
+		Appointment   struct{ ID string }
+		Confirmations []any
+	}
+	s.adopter.do("GET", "/v1/appointments/"+appointment.ID, nil, 200, &detail)
+	if detail.Appointment.ID != appointment.ID || detail.Confirmations == nil {
+		t.Fatal("invalid appointment detail")
+	}
+	stranger.do("GET", path+"/appointments", nil, 403, nil)
+	stranger.do("GET", "/v1/appointments/"+appointment.ID, nil, 403, nil)
 }
