@@ -785,7 +785,7 @@ UPDATE animal_images
 SET moderation_status = $1,
     moderated_by = $2,
     moderated_at = now()
-WHERE id = $3 AND removed_at IS NULL
+WHERE id = $3 AND animal_id = $4 AND removed_at IS NULL
 RETURNING id, animal_id, storage_key, alt_text, position, moderation_status, moderated_by, moderated_at, removed_at, created_at
 `
 
@@ -793,10 +793,16 @@ type ModerateAnimalImageParams struct {
 	ModerationStatus string      `db:"moderation_status" json:"moderation_status"`
 	ModeratedBy      pgtype.UUID `db:"moderated_by" json:"moderated_by"`
 	ID               pgtype.UUID `db:"id" json:"id"`
+	AnimalID         pgtype.UUID `db:"animal_id" json:"animal_id"`
 }
 
 func (q *Queries) ModerateAnimalImage(ctx context.Context, arg ModerateAnimalImageParams) (AnimalImage, error) {
-	row := q.db.QueryRow(ctx, moderateAnimalImage, arg.ModerationStatus, arg.ModeratedBy, arg.ID)
+	row := q.db.QueryRow(ctx, moderateAnimalImage,
+		arg.ModerationStatus,
+		arg.ModeratedBy,
+		arg.ID,
+		arg.AnimalID,
+	)
 	var i AnimalImage
 	err := row.Scan(
 		&i.ID,

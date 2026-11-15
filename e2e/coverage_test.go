@@ -170,3 +170,32 @@ func TestMessageCursorWithEqualTimestamps(t *testing.T) {
 	other.adopter.do("POST", "/v1/conversations/"+other.conversationID+"/messages", map[string]any{"body": "hello"}, 201, &message)
 	s.adopter.do("GET", path+"?before="+message.Message.ID, nil, 422, nil)
 }
+
+func TestAnimalImageModeration(t *testing.T) {
+	s := newAdoptionSetup(t)
+	stranger := registerUser(t)
+	path := "/v1/animals/" + s.animal.ID
+	var image struct{ ID string }
+	s.owner.do("POST", path+"/images", map[string]any{"url": "https://example.com/" + unique() + ".jpg"}, 201, &image)
+	var detail struct {
+		Images []struct{ ID string } `json:"images"`
+	}
+	anonymous := client{t: t}
+	anonymous.do("GET", path, nil, 200, &detail)
+	if len(detail.Images) != 0 {
+		t.Fatal("pending image publicly visible")
+	}
+	moderation := path + "/images/" + image.ID + "/moderation"
+	stranger.do("POST", moderation, map[string]any{"decision": "approved"}, 403, nil)
+	s.owner.do("POST", moderation, map[string]any{"decision": "invalid"}, 422, nil)
+	s.owner.do("POST", moderation, map[string]any{"decision": "approved"}, 200, nil)
+	anonymous.do("GET", path, nil, 200, &detail)
+	if len(detail.Images) != 1 {
+		t.Fatal("approved image missing")
+	}
+	s.owner.do("POST", moderation, map[string]any{"decision": "rejected"}, 200, nil)
+	anonymous.do("GET", path, nil, 200, &detail)
+	if len(detail.Images) != 0 {
+		t.Fatal("rejected image publicly visible")
+	}
+}

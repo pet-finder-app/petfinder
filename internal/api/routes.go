@@ -59,5 +59,6 @@ func registerRoutes(s *Server, mux *http.ServeMux) *huma.OpenAPI {
 	registerRoute[withdrawalRequest, database.AdoptionApplication](reg, http.MethodPost, "/v1/applications/{applicationId}/withdrawal", "withdrawApplication", "Withdraw your application before approval", "Applications", 200, s.protected(s.withdrawApplication), bearerAuth(false))
 	registerRoute[noBody, appointmentListResponse](reg, http.MethodGet, "/v1/applications/{applicationId}/appointments", "listApplicationAppointments", "List application appointments", "Appointments", 200, s.protected(s.listApplicationAppointments), bearerAuth(false))
 	registerRoute[noBody, appointmentDetailResponse](reg, http.MethodGet, "/v1/appointments/{appointmentId}", "getAppointment", "Get appointment and confirmations", "Appointments", 200, s.protected(s.getAppointment), bearerAuth(false))
+	registerRoute[imageModerationRequest, database.AnimalImage](reg, http.MethodPost, "/v1/animals/{animalId}/images/{imageId}/moderation", "moderateAnimalImage", "Approve or reject an animal image", "Animals", 200, s.protected(s.moderateAnimalImage), bearerAuth(false))
 	return reg.spec
 }

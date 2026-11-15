@@ -310,3 +310,7 @@ type withdrawalRequest struct {
 type appointmentListResponse struct {
 	Items []database.Appointment `json:"items"`
 }
+
+type imageModerationRequest struct {
+	Decision string `json:"decision" enum:"approved,rejected"`
+}

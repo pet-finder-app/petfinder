@@ -162,7 +162,7 @@ UPDATE animal_images
 SET moderation_status = sqlc.arg(moderation_status),
     moderated_by = sqlc.arg(moderated_by),
     moderated_at = now()
-WHERE id = sqlc.arg(id) AND removed_at IS NULL
+WHERE id = sqlc.arg(id) AND animal_id = sqlc.arg(animal_id) AND removed_at IS NULL
 RETURNING *;
 
 -- name: RemoveAnimalImage :execrows

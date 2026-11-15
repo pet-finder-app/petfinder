@@ -202,3 +202,36 @@ func (s *Server) withdrawApplication(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, updated)
 }
+
+func (s *Server) moderateAnimalImage(w http.ResponseWriter, r *http.Request) {
+	animalID, ok := pathUUID(r, "animalId")
+	if !ok {
+		invalidPath(w)
+		return
+	}
+	imageID, ok := pathUUID(r, "imageId")
+	if !ok {
+		invalidPath(w)
+		return
+	}
+	animal, err := s.queries.GetAnimalByID(r.Context(), animalID)
+	if err != nil {
+		handleDBError(w, err)
+		return
+	}
+	if !s.animalWriteAllowed(r, animal, true) {
+		writeServiceError(w, ErrForbidden)
+		return
+	}
+	var request imageModerationRequest
+	if !decodeJSON(w, r, &request) {
+		return
+	}
+	actor, _ := subjectUUID(r)
+	image, err := s.queries.ModerateAnimalImage(r.Context(), database.ModerateAnimalImageParams{ID: imageID, AnimalID: animalID, ModerationStatus: request.Decision, ModeratedBy: actor})
+	if err != nil {
+		handleDBError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, image)
+}
