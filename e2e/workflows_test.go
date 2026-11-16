@@ -140,3 +140,55 @@ func TestDonationsAndLegalVersions(t *testing.T) {
 	s.adopter.do("POST", "/v1/me/legal-acceptances", map[string]any{"document_id": legal.ID}, 204, nil)
 	s.owner.do("POST", "/v1/legal/documents", map[string]any{"kind": "terms", "version": unique(), "title": "Terms", "content": "Lorem ipsum dolor sit amet", "reviewed_by": "Test reviewer", "effective_at": time.Now().Add(time.Hour)}, 403, nil)
 }
+
+func TestAgreementSigning(t *testing.T) {
+	s := newAdoptionSetup(t)
+	s.owner.do("POST", "/v1/applications/"+s.applicationID+"/decision", map[string]any{"decision": "approved", "reason": "Approved after interview"}, 200, nil)
+	var template struct {
+		ID      string
+		Version int
+	}
+	path := "/v1/organizations/" + s.org.ID + "/agreement-templates"
+	s.owner.do("POST", path, map[string]any{"kind": "adoption", "body": "{{user_name}} adopts {{animal_name}} from {{organization_name}} on {{date}}."}, 201, &template)
+	if template.Version != 1 {
+		t.Fatal("wrong template version")
+	}
+	s.owner.do("GET", path, nil, 200, nil)
+	var doc signedDocument
+	s.owner.do("POST", "/v1/applications/"+s.applicationID+"/agreement", map[string]any{"template_id": template.ID, "representative_id": s.owner.User.ID}, 201, &doc)
+	if strings.Contains(doc.Body, "{{") || len(doc.SHA256) != 64 {
+		t.Fatal("agreement not populated")
+	}
+	registerUser(t).do("GET", "/v1/agreements/"+doc.ID, nil, 403, nil)
+	signDocument(t, s.adopter, doc)
+	signDocument(t, s.owner, doc)
+	s.adopter.do("GET", "/v1/agreements/"+doc.ID, nil, 200, &doc)
+	if len(doc.Signatures) != 2 {
+		t.Fatal("signatures missing")
+	}
+	s.adopter.do("GET", "/v1/applications/"+s.applicationID+"/agreement", nil, 200, nil)
+	s.adopter.do("POST", "/v1/agreements/"+doc.ID+"/signing-code", nil, 409, nil)
+	s.owner.do("GET", "/v1/agreements/"+doc.ID+"/print", nil, 200, nil)
+}
+
+func TestSigningCodeAttemptLimit(t *testing.T) {
+	s := newAdoptionSetup(t)
+	s.owner.do("POST", "/v1/applications/"+s.applicationID+"/decision", map[string]any{"decision": "approved", "reason": "Applicant approved after review"}, 200, nil)
+	var template struct{ ID string }
+	s.owner.do("POST", "/v1/organizations/"+s.org.ID+"/agreement-templates", map[string]any{"kind": "adoption", "body": "{{user_name}} adopts {{animal_name}} from {{organization_name}}."}, 201, &template)
+	var doc signedDocument
+	s.owner.do("POST", "/v1/applications/"+s.applicationID+"/agreement", map[string]any{"template_id": template.ID, "representative_id": s.owner.User.ID}, 201, &doc)
+	path := "/v1/agreements/" + doc.ID
+	s.adopter.do("POST", path+"/signing-code", nil, 202, nil)
+	code := emailCode(t, s.adopter.User.Email)
+	s.adopter.do("POST", path+"/signing-code", nil, 429, nil)
+	wrong := "000000"
+	if wrong == code {
+		wrong = "111111"
+	}
+	for i := 0; i < 5; i++ {
+		s.adopter.do("POST", path+"/signatures", map[string]any{"code": wrong, "sha256": doc.SHA256, "accept": true}, 422, nil)
+	}
+	s.adopter.do("POST", path+"/signatures", map[string]any{"code": code, "sha256": doc.SHA256, "accept": true}, 409, nil)
+	s.adopter.do("GET", "/v1/me", nil, 200, nil)
+}

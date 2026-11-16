@@ -27,6 +27,48 @@ type AdoptionApplication struct {
 	UpdatedAt        pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
 }
 
+type Agreement struct {
+	ID               pgtype.UUID        `db:"id" json:"id"`
+	ApplicationID    pgtype.UUID        `db:"application_id" json:"application_id"`
+	SurrenderID      pgtype.UUID        `db:"surrender_id" json:"surrender_id"`
+	OrganizationID   pgtype.UUID        `db:"organization_id" json:"organization_id"`
+	TemplateID       pgtype.UUID        `db:"template_id" json:"template_id"`
+	UserID           pgtype.UUID        `db:"user_id" json:"user_id"`
+	RepresentativeID pgtype.UUID        `db:"representative_id" json:"representative_id"`
+	Body             string             `db:"body" json:"body"`
+	Sha256           string             `db:"sha256" json:"sha256"`
+	CreatedAt        pgtype.Timestamptz `db:"created_at" json:"created_at"`
+}
+
+type AgreementCode struct {
+	AgreementID    pgtype.UUID        `db:"agreement_id" json:"agreement_id"`
+	SignerID       pgtype.UUID        `db:"signer_id" json:"signer_id"`
+	CodeHash       string             `db:"code_hash" json:"code_hash"`
+	ExpiresAt      pgtype.Timestamptz `db:"expires_at" json:"expires_at"`
+	FailedAttempts int32              `db:"failed_attempts" json:"failed_attempts"`
+	UsedAt         pgtype.Timestamptz `db:"used_at" json:"used_at"`
+}
+
+type AgreementSignature struct {
+	ID          pgtype.UUID        `db:"id" json:"id"`
+	AgreementID pgtype.UUID        `db:"agreement_id" json:"agreement_id"`
+	SignerID    pgtype.UUID        `db:"signer_id" json:"signer_id"`
+	Sha256      string             `db:"sha256" json:"sha256"`
+	IpAddress   string             `db:"ip_address" json:"ip_address"`
+	UserAgent   string             `db:"user_agent" json:"user_agent"`
+	SignedAt    pgtype.Timestamptz `db:"signed_at" json:"signed_at"`
+}
+
+type AgreementTemplate struct {
+	ID             pgtype.UUID        `db:"id" json:"id"`
+	OrganizationID pgtype.UUID        `db:"organization_id" json:"organization_id"`
+	Kind           string             `db:"kind" json:"kind"`
+	Version        int32              `db:"version" json:"version"`
+	Body           string             `db:"body" json:"body"`
+	CreatedBy      pgtype.UUID        `db:"created_by" json:"created_by"`
+	CreatedAt      pgtype.Timestamptz `db:"created_at" json:"created_at"`
+}
+
 type Animal struct {
 	ID                        pgtype.UUID        `db:"id" json:"id"`
 	SubmittedBy               pgtype.UUID        `db:"submitted_by" json:"submitted_by"`
@@ -439,6 +481,39 @@ type Role struct {
 	ID          pgtype.UUID        `db:"id" json:"id"`
 	Key         string             `db:"key" json:"key"`
 	Description string             `db:"description" json:"description"`
+	CreatedAt   pgtype.Timestamptz `db:"created_at" json:"created_at"`
+}
+
+type Surrender struct {
+	ID                 pgtype.UUID        `db:"id" json:"id"`
+	RequesterID        pgtype.UUID        `db:"requester_id" json:"requester_id"`
+	OrganizationID     pgtype.UUID        `db:"organization_id" json:"organization_id"`
+	Kind               string             `db:"kind" json:"kind"`
+	AnimalID           pgtype.UUID        `db:"animal_id" json:"animal_id"`
+	ApplicationID      pgtype.UUID        `db:"application_id" json:"application_id"`
+	AnimalSnapshot     json.RawMessage    `db:"animal_snapshot" json:"animal_snapshot"`
+	Reason             string             `db:"reason" json:"reason"`
+	Documents          []pgtype.UUID      `db:"documents" json:"documents"`
+	Status             string             `db:"status" json:"status"`
+	ReviewReason       *string            `db:"review_reason" json:"review_reason"`
+	ReviewedBy         pgtype.UUID        `db:"reviewed_by" json:"reviewed_by"`
+	CreatedAt          pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	UpdatedAt          pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
+	HandoverCodeHash   *string            `db:"handover_code_hash" json:"handover_code_hash"`
+	CodeExpiresAt      pgtype.Timestamptz `db:"code_expires_at" json:"code_expires_at"`
+	CodeFailedAttempts int32              `db:"code_failed_attempts" json:"code_failed_attempts"`
+	DeliveredAt        pgtype.Timestamptz `db:"delivered_at" json:"delivered_at"`
+	ReceivedAt         pgtype.Timestamptz `db:"received_at" json:"received_at"`
+	CompletedAt        pgtype.Timestamptz `db:"completed_at" json:"completed_at"`
+}
+
+type SurrenderHistory struct {
+	ID          int64              `db:"id" json:"id"`
+	SurrenderID pgtype.UUID        `db:"surrender_id" json:"surrender_id"`
+	ActorID     pgtype.UUID        `db:"actor_id" json:"actor_id"`
+	Action      string             `db:"action" json:"action"`
+	Notes       string             `db:"notes" json:"notes"`
+	Snapshot    []byte             `db:"snapshot" json:"snapshot"`
 	CreatedAt   pgtype.Timestamptz `db:"created_at" json:"created_at"`
 }
 

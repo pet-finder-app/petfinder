@@ -70,5 +70,6 @@ func registerRoutes(s *Server, mux *http.ServeMux) *huma.OpenAPI {
 	registerEngagementRoutes(s, reg)
 	registerDonationRoutes(s, reg)
 	registerLegalRoutes(s, reg)
+	registerAgreementRoutes(s, reg)
 	return reg.spec
 }

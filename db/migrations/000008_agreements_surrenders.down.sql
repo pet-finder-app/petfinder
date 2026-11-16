@@ -1,0 +1,1 @@
+DROP TABLE agreement_signatures,agreement_codes,agreements,agreement_templates,surrender_history,surrenders;
