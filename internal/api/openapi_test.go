@@ -39,8 +39,8 @@ func TestOpenAPIContract(t *testing.T) {
 			operations++
 		}
 	}
-	if operations != 66 {
-		t.Fatalf("documented %d operations, want 66", operations)
+	if operations != 91 {
+		t.Fatalf("documented %d operations, want 91", operations)
 	}
 	// Every generated reference must resolve within the document.
 	var checkRefs func(any)

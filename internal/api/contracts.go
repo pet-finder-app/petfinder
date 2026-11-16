@@ -179,7 +179,7 @@ type appointmentConfirmationRequest struct {
 type reportRequest struct {
 	Category    string `json:"category" enum:"payment_request,fraud,harassment,inappropriate_content,off_platform_contact,animal_welfare,other"`
 	Description string `json:"description" minLength:"10" maxLength:"5000"`
-	SubjectType string `json:"subject_type" enum:"animal,organization,application,conversation,message"`
+	SubjectType string `json:"subject_type" enum:"animal,organization,application,conversation,message,post"`
 	SubjectID   string `json:"subject_id" format:"uuid"`
 }
 

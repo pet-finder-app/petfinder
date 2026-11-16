@@ -1,11 +1,11 @@
 -- name: CreateReport :one
 INSERT INTO reports (
     reporter_id, organization_id, animal_id, application_id,
-    conversation_id, message_id, category, description, priority
+    conversation_id, message_id, post_id, category, description, priority
 ) VALUES (
     sqlc.arg(reporter_id), sqlc.narg(organization_id), sqlc.narg(animal_id),
     sqlc.narg(application_id), sqlc.narg(conversation_id), sqlc.narg(message_id),
-    sqlc.arg(category), sqlc.arg(description), sqlc.arg(priority)
+    sqlc.narg(post_id), sqlc.arg(category), sqlc.arg(description), sqlc.arg(priority)
 )
 RETURNING *;
 

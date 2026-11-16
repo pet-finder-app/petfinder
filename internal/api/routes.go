@@ -65,5 +65,8 @@ func registerRoutes(s *Server, mux *http.ServeMux) *huma.OpenAPI {
 	registerRoute[deleteAccountRequest, noBody](reg, "DELETE", "/v1/me", "deleteAccount", "Deactivate your account and revoke sessions", "Profile", 204, s.protected(s.deleteAccount), bearerAuth(false))
 	registerProfileRoutes(s, reg)
 	registerAnimalLifecycleRoutes(s, reg)
+	registerMediaRoutes(s, reg)
+	registerCommunityRoutes(s, reg)
+	registerEngagementRoutes(s, reg)
 	return reg.spec
 }

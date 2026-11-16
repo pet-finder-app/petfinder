@@ -98,6 +98,14 @@ type AnimalPreference struct {
 	UpdatedAt  pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
 }
 
+type AnimalPreferenceEvent struct {
+	ID         int64              `db:"id" json:"id"`
+	AnimalID   pgtype.UUID        `db:"animal_id" json:"animal_id"`
+	UserID     pgtype.UUID        `db:"user_id" json:"user_id"`
+	Preference *string            `db:"preference" json:"preference"`
+	CreatedAt  pgtype.Timestamptz `db:"created_at" json:"created_at"`
+}
+
 type ApplicationScreening struct {
 	ID            pgtype.UUID        `db:"id" json:"id"`
 	ApplicationID pgtype.UUID        `db:"application_id" json:"application_id"`
@@ -200,6 +208,26 @@ type Conversation struct {
 	UpdatedAt          pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
 }
 
+type ConversationRead struct {
+	ConversationID   pgtype.UUID        `db:"conversation_id" json:"conversation_id"`
+	UserID           pgtype.UUID        `db:"user_id" json:"user_id"`
+	MessageID        pgtype.UUID        `db:"message_id" json:"message_id"`
+	MessageCreatedAt pgtype.Timestamptz `db:"message_created_at" json:"message_created_at"`
+	ReadAt           pgtype.Timestamptz `db:"read_at" json:"read_at"`
+}
+
+type MediaUpload struct {
+	ID          pgtype.UUID        `db:"id" json:"id"`
+	OwnerID     pgtype.UUID        `db:"owner_id" json:"owner_id"`
+	Filename    string             `db:"filename" json:"filename"`
+	ContentType string             `db:"content_type" json:"content_type"`
+	ByteSize    int32              `db:"byte_size" json:"byte_size"`
+	Purpose     string             `db:"purpose" json:"purpose"`
+	Content     []byte             `db:"content" json:"content"`
+	CreatedAt   pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	UploadedAt  pgtype.Timestamptz `db:"uploaded_at" json:"uploaded_at"`
+}
+
 type Message struct {
 	ID               pgtype.UUID        `db:"id" json:"id"`
 	ConversationID   pgtype.UUID        `db:"conversation_id" json:"conversation_id"`
@@ -212,6 +240,15 @@ type Message struct {
 	EditedAt         pgtype.Timestamptz `db:"edited_at" json:"edited_at"`
 	DeletedAt        pgtype.Timestamptz `db:"deleted_at" json:"deleted_at"`
 	CreatedAt        pgtype.Timestamptz `db:"created_at" json:"created_at"`
+}
+
+type Notification struct {
+	ID        pgtype.UUID        `db:"id" json:"id"`
+	UserID    pgtype.UUID        `db:"user_id" json:"user_id"`
+	Kind      string             `db:"kind" json:"kind"`
+	SubjectID pgtype.UUID        `db:"subject_id" json:"subject_id"`
+	CreatedAt pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	ReadAt    pgtype.Timestamptz `db:"read_at" json:"read_at"`
 }
 
 type Organization struct {
@@ -241,6 +278,12 @@ type Organization struct {
 	PrivateProfile     json.RawMessage    `db:"private_profile" json:"private_profile"`
 }
 
+type OrganizationFollower struct {
+	OrganizationID pgtype.UUID        `db:"organization_id" json:"organization_id"`
+	UserID         pgtype.UUID        `db:"user_id" json:"user_id"`
+	CreatedAt      pgtype.Timestamptz `db:"created_at" json:"created_at"`
+}
+
 type OrganizationMember struct {
 	ID                    pgtype.UUID        `db:"id" json:"id"`
 	OrganizationID        pgtype.UUID        `db:"organization_id" json:"organization_id"`
@@ -267,6 +310,18 @@ type PasswordResetToken struct {
 	CreatedAt pgtype.Timestamptz `db:"created_at" json:"created_at"`
 }
 
+type Post struct {
+	ID             pgtype.UUID        `db:"id" json:"id"`
+	OrganizationID pgtype.UUID        `db:"organization_id" json:"organization_id"`
+	AuthorID       pgtype.UUID        `db:"author_id" json:"author_id"`
+	Body           string             `db:"body" json:"body"`
+	MediaIds       []pgtype.UUID      `db:"media_ids" json:"media_ids"`
+	Tags           []string           `db:"tags" json:"tags"`
+	CreatedAt      pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
+	DeletedAt      pgtype.Timestamptz `db:"deleted_at" json:"deleted_at"`
+}
+
 type PostAdoptionFollowup struct {
 	ID             pgtype.UUID        `db:"id" json:"id"`
 	ApplicationID  pgtype.UUID        `db:"application_id" json:"application_id"`
@@ -277,6 +332,12 @@ type PostAdoptionFollowup struct {
 	WelfareStatus  string             `db:"welfare_status" json:"welfare_status"`
 	RecordedBy     pgtype.UUID        `db:"recorded_by" json:"recorded_by"`
 	CreatedAt      pgtype.Timestamptz `db:"created_at" json:"created_at"`
+}
+
+type PostLike struct {
+	PostID    pgtype.UUID        `db:"post_id" json:"post_id"`
+	UserID    pgtype.UUID        `db:"user_id" json:"user_id"`
+	CreatedAt pgtype.Timestamptz `db:"created_at" json:"created_at"`
 }
 
 type RefreshSession struct {
@@ -312,6 +373,7 @@ type Report struct {
 	ResolvedAt     pgtype.Timestamptz `db:"resolved_at" json:"resolved_at"`
 	CreatedAt      pgtype.Timestamptz `db:"created_at" json:"created_at"`
 	UpdatedAt      pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
+	PostID         pgtype.UUID        `db:"post_id" json:"post_id"`
 }
 
 type Role struct {

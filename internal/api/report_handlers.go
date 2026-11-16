@@ -30,6 +30,14 @@ func (s *Server) createReport(w http.ResponseWriter, r *http.Request) {
 	}
 	params := database.CreateReportParams{ReporterID: actor, Category: request.Category, Description: request.Description, Priority: "normal"}
 	switch request.SubjectType {
+	case "post":
+		params.PostID = subjectID
+		var org pgtype.UUID
+		if err := s.pool.QueryRow(r.Context(), "SELECT organization_id FROM posts WHERE id=$1 AND deleted_at IS NULL", subjectID).Scan(&org); err != nil {
+			handleDBError(w, err)
+			return
+		}
+		params.OrganizationID = org
 	case "organization":
 		params.OrganizationID = subjectID
 	case "animal":

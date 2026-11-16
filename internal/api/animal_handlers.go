@@ -364,6 +364,12 @@ func (s *Server) addAnimalImage(w http.ResponseWriter, r *http.Request) {
 	}
 	errs := fieldErrors{}
 	request.URL = validImageURL(errs, "url", request.URL)
+	if index := strings.LastIndex(request.URL, "/v1/media/"); index >= 0 {
+		raw := request.URL[index+len("/v1/media/"):]
+		if !s.checkMedia(w, r, []string{raw}, "animal") {
+			return
+		}
+	}
 
 	request.AltText = optional(errs, "alt_text", request.AltText, 300)
 	if request.Position < 0 {
