@@ -147,7 +147,7 @@ func clientAddress(r *http.Request) *netip.Addr {
 	return &parsed
 }
 
-func (s *Server) createRefreshSession(r *http.Request, q *database.Queries, userID pgtype.UUID) (string, database.RefreshSession, error) {
+func (s *Server) createRefreshSession(r *http.Request, q *database.Queries, userID pgtype.UUID, version int32) (string, database.RefreshSession, error) {
 	token, hash, err := randomToken(32)
 	if err != nil {
 		return "", database.RefreshSession{}, err
@@ -157,7 +157,7 @@ func (s *Server) createRefreshSession(r *http.Request, q *database.Queries, user
 	if ua != "" {
 		userAgent = &ua
 	}
-	session, err := q.CreateRefreshSession(r.Context(), database.CreateRefreshSessionParams{
+	session, err := q.CreateRefreshSession(r.Context(), database.CreateRefreshSessionParams{AuthVersion: version,
 		UserID: userID, TokenHash: hash, UserAgent: userAgent, IpAddress: clientAddress(r),
 		ExpiresAt: pgtype.Timestamptz{Time: time.Now().UTC().Add(s.refreshTTL), Valid: true},
 	})

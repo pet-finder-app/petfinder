@@ -21,7 +21,7 @@ INSERT INTO users (
     $8, $9, $10,
     $11
 )
-RETURNING id, email, password_hash, display_name, phone, city, state_code, country_code, latitude, longitude, terms_accepted_at, privacy_accepted_at, email_verified_at, deactivated_at, deleted_at, created_at, updated_at
+RETURNING id, email, password_hash, display_name, phone, city, state_code, country_code, latitude, longitude, terms_accepted_at, privacy_accepted_at, email_verified_at, deactivated_at, deleted_at, created_at, updated_at, auth_version
 `
 
 type CreateUserParams struct {
@@ -71,13 +71,14 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.DeletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.AuthVersion,
 	)
 	return i, err
 }
 
 const deactivateUser = `-- name: DeactivateUser :execrows
 UPDATE users
-SET deactivated_at = now()
+SET deactivated_at = now(), auth_version = auth_version + 1
 WHERE id = $1 AND deactivated_at IS NULL AND deleted_at IS NULL
 `
 
@@ -90,7 +91,7 @@ func (q *Queries) DeactivateUser(ctx context.Context, id pgtype.UUID) (int64, er
 }
 
 const getActiveUserByEmail = `-- name: GetActiveUserByEmail :one
-SELECT id, email, password_hash, display_name, phone, city, state_code, country_code, latitude, longitude, terms_accepted_at, privacy_accepted_at, email_verified_at, deactivated_at, deleted_at, created_at, updated_at FROM users
+SELECT id, email, password_hash, display_name, phone, city, state_code, country_code, latitude, longitude, terms_accepted_at, privacy_accepted_at, email_verified_at, deactivated_at, deleted_at, created_at, updated_at, auth_version FROM users
 WHERE email = $1
   AND deleted_at IS NULL
   AND deactivated_at IS NULL
@@ -117,12 +118,13 @@ func (q *Queries) GetActiveUserByEmail(ctx context.Context, email string) (User,
 		&i.DeletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.AuthVersion,
 	)
 	return i, err
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, email, password_hash, display_name, phone, city, state_code, country_code, latitude, longitude, terms_accepted_at, privacy_accepted_at, email_verified_at, deactivated_at, deleted_at, created_at, updated_at FROM users
+SELECT id, email, password_hash, display_name, phone, city, state_code, country_code, latitude, longitude, terms_accepted_at, privacy_accepted_at, email_verified_at, deactivated_at, deleted_at, created_at, updated_at, auth_version FROM users
 WHERE id = $1 AND deleted_at IS NULL
 `
 
@@ -147,6 +149,7 @@ func (q *Queries) GetUserByID(ctx context.Context, id pgtype.UUID) (User, error)
 		&i.DeletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.AuthVersion,
 	)
 	return i, err
 }
@@ -207,7 +210,7 @@ const markUserEmailVerified = `-- name: MarkUserEmailVerified :one
 UPDATE users
 SET email_verified_at = COALESCE(email_verified_at, now())
 WHERE id = $1 AND deleted_at IS NULL
-RETURNING id, email, password_hash, display_name, phone, city, state_code, country_code, latitude, longitude, terms_accepted_at, privacy_accepted_at, email_verified_at, deactivated_at, deleted_at, created_at, updated_at
+RETURNING id, email, password_hash, display_name, phone, city, state_code, country_code, latitude, longitude, terms_accepted_at, privacy_accepted_at, email_verified_at, deactivated_at, deleted_at, created_at, updated_at, auth_version
 `
 
 func (q *Queries) MarkUserEmailVerified(ctx context.Context, id pgtype.UUID) (User, error) {
@@ -231,6 +234,7 @@ func (q *Queries) MarkUserEmailVerified(ctx context.Context, id pgtype.UUID) (Us
 		&i.DeletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.AuthVersion,
 	)
 	return i, err
 }
@@ -272,7 +276,7 @@ func (q *Queries) SoftDeleteUser(ctx context.Context, id pgtype.UUID) (int64, er
 
 const updateUserPassword = `-- name: UpdateUserPassword :execrows
 UPDATE users
-SET password_hash = $1
+SET password_hash = $1, auth_version = auth_version + 1
 WHERE id = $2 AND deleted_at IS NULL AND deactivated_at IS NULL
 `
 
@@ -299,7 +303,7 @@ SET display_name = $1,
     latitude = $6,
     longitude = $7
 WHERE id = $8 AND deleted_at IS NULL AND deactivated_at IS NULL
-RETURNING id, email, password_hash, display_name, phone, city, state_code, country_code, latitude, longitude, terms_accepted_at, privacy_accepted_at, email_verified_at, deactivated_at, deleted_at, created_at, updated_at
+RETURNING id, email, password_hash, display_name, phone, city, state_code, country_code, latitude, longitude, terms_accepted_at, privacy_accepted_at, email_verified_at, deactivated_at, deleted_at, created_at, updated_at, auth_version
 `
 
 type UpdateUserProfileParams struct {
@@ -343,6 +347,7 @@ func (q *Queries) UpdateUserProfile(ctx context.Context, arg UpdateUserProfilePa
 		&i.DeletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.AuthVersion,
 	)
 	return i, err
 }

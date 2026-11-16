@@ -60,5 +60,8 @@ func registerRoutes(s *Server, mux *http.ServeMux) *huma.OpenAPI {
 	registerRoute[noBody, appointmentListResponse](reg, http.MethodGet, "/v1/applications/{applicationId}/appointments", "listApplicationAppointments", "List application appointments", "Appointments", 200, s.protected(s.listApplicationAppointments), bearerAuth(false))
 	registerRoute[noBody, appointmentDetailResponse](reg, http.MethodGet, "/v1/appointments/{appointmentId}", "getAppointment", "Get appointment and confirmations", "Appointments", 200, s.protected(s.getAppointment), bearerAuth(false))
 	registerRoute[imageModerationRequest, database.AnimalImage](reg, http.MethodPost, "/v1/animals/{animalId}/images/{imageId}/moderation", "moderateAnimalImage", "Approve or reject an animal image", "Animals", 200, s.protected(s.moderateAnimalImage), bearerAuth(false))
+	registerRoute[forgotPasswordRequest, noBody](reg, "POST", "/v1/auth/forgot-password", "requestPasswordReset", "Email a password recovery link", "Authentication", 202, http.HandlerFunc(s.forgotPassword))
+	registerRoute[resetPasswordRequest, noBody](reg, "POST", "/v1/auth/reset-password", "resetPassword", "Consume a single-use recovery token", "Authentication", 204, http.HandlerFunc(s.resetPassword))
+	registerRoute[deleteAccountRequest, noBody](reg, "DELETE", "/v1/me", "deleteAccount", "Deactivate your account and revoke sessions", "Profile", 204, s.protected(s.deleteAccount), bearerAuth(false))
 	return reg.spec
 }

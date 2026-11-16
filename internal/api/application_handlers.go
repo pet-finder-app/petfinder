@@ -434,6 +434,9 @@ func (s *Server) sendMessage(w http.ResponseWriter, r *http.Request) {
 // authorizeMessage reports whether the actor may post to an open conversation
 // and whether they see it as an organization moderator.
 func (s *Server) authorizeMessage(r *http.Request, conversationID pgtype.UUID) (bool, error) {
+	if !s.validAccount(r) {
+		return false, ErrForbidden
+	}
 	conversation, err := s.queries.GetConversationByID(r.Context(), conversationID)
 	if err != nil {
 		return false, serviceError(err)

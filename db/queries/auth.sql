@@ -1,17 +1,17 @@
 -- name: CreateRefreshSession :one
 INSERT INTO refresh_sessions (
-    user_id, token_hash, user_agent, ip_address, expires_at
+    user_id, token_hash, user_agent, ip_address, expires_at, auth_version
 ) VALUES (
     sqlc.arg(user_id), sqlc.arg(token_hash), sqlc.narg(user_agent),
-    sqlc.narg(ip_address), sqlc.arg(expires_at)
+    sqlc.narg(ip_address), sqlc.arg(expires_at), sqlc.arg(auth_version)
 )
 RETURNING *;
 
 -- name: GetActiveRefreshSessionByTokenHash :one
-SELECT * FROM refresh_sessions
-WHERE token_hash = sqlc.arg(token_hash)
-  AND revoked_at IS NULL
-  AND expires_at > now();
+SELECT rs.* FROM refresh_sessions rs JOIN users u ON u.id=rs.user_id
+WHERE rs.token_hash = sqlc.arg(token_hash)
+  AND rs.revoked_at IS NULL AND rs.expires_at > now()
+  AND rs.auth_version=u.auth_version AND u.deactivated_at IS NULL AND u.deleted_at IS NULL;
 
 -- name: TouchRefreshSession :execrows
 UPDATE refresh_sessions

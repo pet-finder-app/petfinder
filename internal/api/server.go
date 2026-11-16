@@ -18,6 +18,8 @@ type Server struct {
 	accessTTL  time.Duration
 	refreshTTL time.Duration
 	chat       *chatHub
+	email      EmailSender
+	resetURL   string
 }
 
 func NewServer(pool *pgxpool.Pool, tokens *auth.TokenManager, accessTTL, refreshTTL time.Duration) *Server {
@@ -38,11 +40,11 @@ func (s *Server) Handler() http.Handler {
 }
 
 func (s *Server) protected(handler http.HandlerFunc) http.Handler {
-	return s.tokens.Authenticate(handler)
+	return s.tokens.Authenticate(s.accountActive(handler))
 }
 
 func (s *Server) admin(handler http.HandlerFunc) http.Handler {
-	return s.tokens.Authenticate(auth.RequireRole(auth.RoleAdmin)(handler))
+	return s.tokens.Authenticate(s.accountActive(auth.RequireRole(auth.RoleAdmin)(handler)))
 }
 
 func (s *Server) optionalAuth(handler http.HandlerFunc) http.Handler {
@@ -62,6 +64,29 @@ func (s *Server) optionalAuth(handler http.HandlerFunc) http.Handler {
 			writeProblem(w, http.StatusUnauthorized, "Unauthorized", "invalid bearer token", nil)
 			return
 		}
-		handler.ServeHTTP(w, r.WithContext(auth.WithClaims(r.Context(), claims)))
+		s.accountActive(handler).ServeHTTP(w, r.WithContext(auth.WithClaims(r.Context(), claims)))
 	})
+}
+
+func (s *Server) accountActive(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !s.validAccount(r) {
+			writeProblem(w, 401, "Unauthorized", "account or session is unavailable", nil)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func (s *Server) validAccount(r *http.Request) bool {
+	id, ok := subjectUUID(r)
+	if !ok {
+		return false
+	}
+	claims, ok := auth.ClaimsFromContext(r.Context())
+	if !ok {
+		return false
+	}
+	u, err := s.queries.GetUserByID(r.Context(), id)
+	return err == nil && !u.DeactivatedAt.Valid && int(u.AuthVersion) == claims.Version
 }

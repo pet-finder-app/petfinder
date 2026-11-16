@@ -40,12 +40,12 @@ RETURNING *;
 
 -- name: UpdateUserPassword :execrows
 UPDATE users
-SET password_hash = sqlc.arg(password_hash)
+SET password_hash = sqlc.arg(password_hash), auth_version = auth_version + 1
 WHERE id = sqlc.arg(id) AND deleted_at IS NULL AND deactivated_at IS NULL;
 
 -- name: DeactivateUser :execrows
 UPDATE users
-SET deactivated_at = now()
+SET deactivated_at = now(), auth_version = auth_version + 1
 WHERE id = sqlc.arg(id) AND deactivated_at IS NULL AND deleted_at IS NULL;
 
 -- name: SoftDeleteUser :execrows

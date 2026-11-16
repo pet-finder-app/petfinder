@@ -275,6 +275,7 @@ type RefreshSession struct {
 	RevokeReason *string            `db:"revoke_reason" json:"revoke_reason"`
 	ReplacedByID pgtype.UUID        `db:"replaced_by_id" json:"replaced_by_id"`
 	CreatedAt    pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	AuthVersion  int32              `db:"auth_version" json:"auth_version"`
 }
 
 type Report struct {
@@ -322,6 +323,7 @@ type User struct {
 	DeletedAt         pgtype.Timestamptz `db:"deleted_at" json:"deleted_at"`
 	CreatedAt         pgtype.Timestamptz `db:"created_at" json:"created_at"`
 	UpdatedAt         pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
+	AuthVersion       int32              `db:"auth_version" json:"auth_version"`
 }
 
 type UserRole struct {

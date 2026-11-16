@@ -64,12 +64,12 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 		handleDBError(w, err)
 		return
 	}
-	refresh, _, err := s.createRefreshSession(r, q, user.ID)
+	refresh, _, err := s.createRefreshSession(r, q, user.ID, user.AuthVersion)
 	if err != nil {
 		writeServiceError(w, err)
 		return
 	}
-	access, err := s.tokens.Issue(uuidString(user.ID), roleClaims(roles))
+	access, err := s.tokens.IssueVersion(uuidString(user.ID), roleClaims(roles), int(user.AuthVersion))
 	if err != nil {
 		writeServiceError(w, err)
 		return
@@ -97,12 +97,12 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		handleDBError(w, err)
 		return
 	}
-	refresh, _, err := s.createRefreshSession(r, s.queries, user.ID)
+	refresh, _, err := s.createRefreshSession(r, s.queries, user.ID, user.AuthVersion)
 	if err != nil {
 		handleDBError(w, err)
 		return
 	}
-	access, err := s.tokens.Issue(uuidString(user.ID), roleClaims(roles))
+	access, err := s.tokens.IssueVersion(uuidString(user.ID), roleClaims(roles), int(user.AuthVersion))
 	if err != nil {
 		writeServiceError(w, err)
 		return
@@ -133,7 +133,7 @@ func (s *Server) refresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	user, err := q.GetUserByID(r.Context(), session.UserID)
-	if err != nil {
+	if err != nil || user.DeactivatedAt.Valid {
 		writeProblem(w, http.StatusUnauthorized, "Invalid session", "account is unavailable", nil)
 		return
 	}
@@ -142,7 +142,7 @@ func (s *Server) refresh(w http.ResponseWriter, r *http.Request) {
 		handleDBError(w, err)
 		return
 	}
-	newToken, replacement, err := s.createRefreshSession(r, q, user.ID)
+	newToken, replacement, err := s.createRefreshSession(r, q, user.ID, user.AuthVersion)
 	if err != nil {
 		handleDBError(w, err)
 		return
@@ -152,7 +152,7 @@ func (s *Server) refresh(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, http.StatusUnauthorized, "Invalid session", "refresh token was already used", nil)
 		return
 	}
-	access, err := s.tokens.Issue(uuidString(user.ID), roleClaims(roles))
+	access, err := s.tokens.IssueVersion(uuidString(user.ID), roleClaims(roles), int(user.AuthVersion))
 	if err != nil {
 		writeServiceError(w, err)
 		return

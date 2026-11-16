@@ -90,12 +90,12 @@ func (s *Server) chatSocket(w http.ResponseWriter, r *http.Request) {
 	if claims, _ := auth.ClaimsFromContext(r.Context()); claims.ExpiresAt != nil {
 		expiresAt = claims.ExpiresAt.Time
 	}
-	s.serveChat(w, r, id, expiresAt)
+	s.serveChat(w, r, id, expiresAt, func() bool { _, err := s.authorizeMessage(r, id); return err == nil })
 }
 
 // serveChat upgrades an authorized request and relays the conversation until
 // the client leaves, the access token expires at expiresAt, or the server stops.
-func (s *Server) serveChat(w http.ResponseWriter, r *http.Request, id pgtype.UUID, expiresAt time.Time) {
+func (s *Server) serveChat(w http.ResponseWriter, r *http.Request, id pgtype.UUID, expiresAt time.Time, checks ...func() bool) {
 	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
 		Subprotocols: []string{chatSubprotocol},
 		// Credentials are never sent implicitly (no cookies), so a cross-origin
@@ -119,7 +119,11 @@ func (s *Server) serveChat(w http.ResponseWriter, r *http.Request, id pgtype.UUI
 		defer timer.Stop()
 		expires = timer.C
 	}
-	err = s.writeChatEvents(r.Context(), conn, sub, readErr, expires)
+	var check func() bool
+	if len(checks) > 0 {
+		check = checks[0]
+	}
+	err = s.writeChatEvents(r.Context(), conn, sub, readErr, expires, check)
 	switch {
 	case errors.Is(err, errChatTokenExpired):
 		_ = conn.Close(chatStatusTokenExpired, err.Error())
@@ -134,7 +138,7 @@ func (s *Server) serveChat(w http.ResponseWriter, r *http.Request, id pgtype.UUI
 
 // writeChatEvents is the only writer to conn. It returns why the connection
 // should end; the reader's error means the client is already gone.
-func (s *Server) writeChatEvents(ctx context.Context, conn *websocket.Conn, sub *chatSubscriber, readErr <-chan error, expires <-chan time.Time) error {
+func (s *Server) writeChatEvents(ctx context.Context, conn *websocket.Conn, sub *chatSubscriber, readErr <-chan error, expires <-chan time.Time, check func() bool) error {
 	ping := time.NewTicker(chatPingInterval)
 	defer ping.Stop()
 	for {
@@ -150,10 +154,16 @@ func (s *Server) writeChatEvents(ctx context.Context, conn *websocket.Conn, sub 
 		case <-ctx.Done():
 			return ctx.Err()
 		case event := <-sub.events:
+			if check != nil && !check() {
+				return errChatTokenExpired
+			}
 			if err := writeChatFrame(ctx, conn, event); err != nil {
 				return err
 			}
 		case <-ping.C:
+			if check != nil && !check() {
+				return errChatTokenExpired
+			}
 			pingCtx, cancel := context.WithTimeout(ctx, chatWriteTimeout)
 			err := conn.Ping(pingCtx)
 			cancel()

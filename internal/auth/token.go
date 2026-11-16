@@ -38,7 +38,8 @@ type TokenConfig struct {
 
 // Claims are the authenticated identity carried by an access token.
 type Claims struct {
-	Roles []Role `json:"roles"`
+	Roles   []Role `json:"roles"`
+	Version int    `json:"version"`
 	jwt.RegisteredClaims
 }
 
@@ -110,6 +111,10 @@ func NewTokenManager(config TokenConfig) (*TokenManager, error) {
 // Issue creates a signed HS256 access token for subject. Duplicate roles are
 // removed before the claims are signed.
 func (m *TokenManager) Issue(subject string, roles []Role) (string, error) {
+	return m.IssueVersion(subject, roles, 0)
+}
+
+func (m *TokenManager) IssueVersion(subject string, roles []Role, version int) (string, error) {
 	if subject == "" {
 		return "", ErrSubjectRequired
 	}
@@ -123,7 +128,7 @@ func (m *TokenManager) Issue(subject string, roles []Role) (string, error) {
 		return "", fmt.Errorf("create token ID: %w", err)
 	}
 	claims := Claims{
-		Roles: uniqueRoles(roles),
+		Roles: uniqueRoles(roles), Version: version,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    m.issuer,
 			Subject:   subject,

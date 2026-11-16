@@ -58,20 +58,21 @@ func (q *Queries) CreatePasswordResetToken(ctx context.Context, arg CreatePasswo
 
 const createRefreshSession = `-- name: CreateRefreshSession :one
 INSERT INTO refresh_sessions (
-    user_id, token_hash, user_agent, ip_address, expires_at
+    user_id, token_hash, user_agent, ip_address, expires_at, auth_version
 ) VALUES (
     $1, $2, $3,
-    $4, $5
+    $4, $5, $6
 )
-RETURNING id, user_id, token_hash, user_agent, ip_address, expires_at, last_used_at, revoked_at, revoke_reason, replaced_by_id, created_at
+RETURNING id, user_id, token_hash, user_agent, ip_address, expires_at, last_used_at, revoked_at, revoke_reason, replaced_by_id, created_at, auth_version
 `
 
 type CreateRefreshSessionParams struct {
-	UserID    pgtype.UUID        `db:"user_id" json:"user_id"`
-	TokenHash []byte             `db:"token_hash" json:"token_hash"`
-	UserAgent *string            `db:"user_agent" json:"user_agent"`
-	IpAddress *netip.Addr        `db:"ip_address" json:"ip_address"`
-	ExpiresAt pgtype.Timestamptz `db:"expires_at" json:"expires_at"`
+	UserID      pgtype.UUID        `db:"user_id" json:"user_id"`
+	TokenHash   []byte             `db:"token_hash" json:"token_hash"`
+	UserAgent   *string            `db:"user_agent" json:"user_agent"`
+	IpAddress   *netip.Addr        `db:"ip_address" json:"ip_address"`
+	ExpiresAt   pgtype.Timestamptz `db:"expires_at" json:"expires_at"`
+	AuthVersion int32              `db:"auth_version" json:"auth_version"`
 }
 
 func (q *Queries) CreateRefreshSession(ctx context.Context, arg CreateRefreshSessionParams) (RefreshSession, error) {
@@ -81,6 +82,7 @@ func (q *Queries) CreateRefreshSession(ctx context.Context, arg CreateRefreshSes
 		arg.UserAgent,
 		arg.IpAddress,
 		arg.ExpiresAt,
+		arg.AuthVersion,
 	)
 	var i RefreshSession
 	err := row.Scan(
@@ -95,6 +97,7 @@ func (q *Queries) CreateRefreshSession(ctx context.Context, arg CreateRefreshSes
 		&i.RevokeReason,
 		&i.ReplacedByID,
 		&i.CreatedAt,
+		&i.AuthVersion,
 	)
 	return i, err
 }
@@ -149,10 +152,10 @@ func (q *Queries) GetActivePasswordResetTokenByHash(ctx context.Context, tokenHa
 }
 
 const getActiveRefreshSessionByTokenHash = `-- name: GetActiveRefreshSessionByTokenHash :one
-SELECT id, user_id, token_hash, user_agent, ip_address, expires_at, last_used_at, revoked_at, revoke_reason, replaced_by_id, created_at FROM refresh_sessions
-WHERE token_hash = $1
-  AND revoked_at IS NULL
-  AND expires_at > now()
+SELECT rs.id, rs.user_id, rs.token_hash, rs.user_agent, rs.ip_address, rs.expires_at, rs.last_used_at, rs.revoked_at, rs.revoke_reason, rs.replaced_by_id, rs.created_at, rs.auth_version FROM refresh_sessions rs JOIN users u ON u.id=rs.user_id
+WHERE rs.token_hash = $1
+  AND rs.revoked_at IS NULL AND rs.expires_at > now()
+  AND rs.auth_version=u.auth_version AND u.deactivated_at IS NULL AND u.deleted_at IS NULL
 `
 
 func (q *Queries) GetActiveRefreshSessionByTokenHash(ctx context.Context, tokenHash []byte) (RefreshSession, error) {
@@ -170,6 +173,7 @@ func (q *Queries) GetActiveRefreshSessionByTokenHash(ctx context.Context, tokenH
 		&i.RevokeReason,
 		&i.ReplacedByID,
 		&i.CreatedAt,
+		&i.AuthVersion,
 	)
 	return i, err
 }
