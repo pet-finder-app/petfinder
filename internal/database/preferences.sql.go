@@ -7,6 +7,7 @@ package database
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -53,7 +54,7 @@ func (q *Queries) GetAnimalPreference(ctx context.Context, arg GetAnimalPreferen
 }
 
 const listPreferredAnimals = `-- name: ListPreferredAnimals :many
-SELECT a.id, a.submitted_by, a.responsible_organization_id, a.source, a.status, a.organization_review_status, a.organization_review_notes, a.reviewed_by, a.reviewed_at, a.name, a.species, a.breed, a.sex, a.size, a.birth_date, a.approximate_age_months, a.description, a.health_notes, a.behavior_notes, a.vaccinated, a.neutered, a.special_needs, a.city, a.state_code, a.country_code, a.latitude, a.longitude, a.published_at, a.unavailable_reason, a.adopted_at, a.deleted_at, a.created_at, a.updated_at, p.preference, p.updated_at AS preference_updated_at,
+SELECT a.id, a.submitted_by, a.responsible_organization_id, a.source, a.status, a.organization_review_status, a.organization_review_notes, a.reviewed_by, a.reviewed_at, a.name, a.species, a.breed, a.sex, a.size, a.birth_date, a.approximate_age_months, a.description, a.health_notes, a.behavior_notes, a.vaccinated, a.neutered, a.special_needs, a.city, a.state_code, a.country_code, a.latitude, a.longitude, a.published_at, a.unavailable_reason, a.adopted_at, a.deleted_at, a.created_at, a.updated_at, a.attributes, p.preference, p.updated_at AS preference_updated_at,
        o.display_name AS organization_name, o.slug AS organization_slug
 FROM animal_preferences p
 JOIN animals a ON a.id = p.animal_id
@@ -106,6 +107,7 @@ type ListPreferredAnimalsRow struct {
 	DeletedAt                 pgtype.Timestamptz `db:"deleted_at" json:"deleted_at"`
 	CreatedAt                 pgtype.Timestamptz `db:"created_at" json:"created_at"`
 	UpdatedAt                 pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
+	Attributes                json.RawMessage    `db:"attributes" json:"attributes"`
 	Preference                string             `db:"preference" json:"preference"`
 	PreferenceUpdatedAt       pgtype.Timestamptz `db:"preference_updated_at" json:"preference_updated_at"`
 	OrganizationName          *string            `db:"organization_name" json:"organization_name"`
@@ -160,6 +162,7 @@ func (q *Queries) ListPreferredAnimals(ctx context.Context, arg ListPreferredAni
 			&i.DeletedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Attributes,
 			&i.Preference,
 			&i.PreferenceUpdatedAt,
 			&i.OrganizationName,

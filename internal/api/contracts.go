@@ -83,31 +83,33 @@ type addOrganizationMemberRequest struct {
 }
 
 type animalRequest struct {
-	OrganizationID       *string       `json:"organization_id,omitempty" format:"uuid"`
-	Name                 string        `json:"name" minLength:"1" maxLength:"100"`
-	Species              string        `json:"species" enum:"dog,cat,other"`
-	Breed                *string       `json:"breed,omitempty" maxLength:"100"`
-	Size                 string        `json:"size" enum:"small,medium,large,extra_large"`
-	Sex                  string        `json:"sex" enum:"female,male,unknown"`
-	ApproximateBirthDate *string       `json:"approximate_birth_date,omitempty" format:"date"`
-	Description          string        `json:"description" minLength:"20" maxLength:"5000"`
-	HealthNotes          string        `json:"health_notes,omitempty" maxLength:"3000"`
-	BehaviorNotes        string        `json:"behavior_notes,omitempty" maxLength:"3000"`
-	Location             locationInput `json:"location"`
+	Attributes           *animalAttributes `json:"attributes,omitempty"`
+	OrganizationID       *string           `json:"organization_id,omitempty" format:"uuid"`
+	Name                 string            `json:"name" minLength:"1" maxLength:"100"`
+	Species              string            `json:"species" enum:"dog,cat,bird,rabbit,reptile,small_mammal,other"`
+	Breed                *string           `json:"breed,omitempty" maxLength:"100"`
+	Size                 string            `json:"size" enum:"small,medium,large,extra_large"`
+	Sex                  string            `json:"sex" enum:"female,male,unknown"`
+	ApproximateBirthDate *string           `json:"approximate_birth_date,omitempty" format:"date"`
+	Description          string            `json:"description" minLength:"20" maxLength:"5000"`
+	HealthNotes          string            `json:"health_notes,omitempty" maxLength:"3000"`
+	BehaviorNotes        string            `json:"behavior_notes,omitempty" maxLength:"3000"`
+	Location             locationInput     `json:"location"`
 }
 
 // PATCH keeps the same fields as animalRequest but permits omitted fields.
 type updateAnimalRequest struct {
-	Name                 string        `json:"name,omitempty" minLength:"1" maxLength:"100"`
-	Species              string        `json:"species,omitempty" enum:"dog,cat,other"`
-	Breed                *string       `json:"breed,omitempty" maxLength:"100"`
-	Size                 string        `json:"size,omitempty" enum:"small,medium,large,extra_large"`
-	Sex                  string        `json:"sex,omitempty" enum:"female,male,unknown"`
-	ApproximateBirthDate *string       `json:"approximate_birth_date,omitempty" format:"date"`
-	Description          string        `json:"description,omitempty" minLength:"20" maxLength:"5000"`
-	HealthNotes          string        `json:"health_notes,omitempty" maxLength:"3000"`
-	BehaviorNotes        string        `json:"behavior_notes,omitempty" maxLength:"3000"`
-	Location             locationInput `json:"location,omitempty"`
+	Attributes           *animalAttributes `json:"attributes,omitempty"`
+	Name                 string            `json:"name,omitempty" minLength:"1" maxLength:"100"`
+	Species              string            `json:"species,omitempty" enum:"dog,cat,bird,rabbit,reptile,small_mammal,other"`
+	Breed                *string           `json:"breed,omitempty" maxLength:"100"`
+	Size                 string            `json:"size,omitempty" enum:"small,medium,large,extra_large"`
+	Sex                  string            `json:"sex,omitempty" enum:"female,male,unknown"`
+	ApproximateBirthDate *string           `json:"approximate_birth_date,omitempty" format:"date"`
+	Description          string            `json:"description,omitempty" minLength:"20" maxLength:"5000"`
+	HealthNotes          string            `json:"health_notes,omitempty" maxLength:"3000"`
+	BehaviorNotes        string            `json:"behavior_notes,omitempty" maxLength:"3000"`
+	Location             locationInput     `json:"location,omitempty"`
 }
 
 type animalStatusRequest struct {

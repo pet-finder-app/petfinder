@@ -16,8 +16,8 @@ import (
 func validateAnimal(request *animalRequest) fieldErrors {
 	errs := fieldErrors{}
 	request.Name = required(errs, "name", request.Name, 100)
-	if request.Species != "dog" && request.Species != "cat" && request.Species != "other" {
-		errs.add("species", "must be dog, cat, or other")
+	if !validSpecies(request.Species) {
+		errs.add("species", "invalid species")
 	}
 	if request.Size != "small" && request.Size != "medium" && request.Size != "large" && request.Size != "extra_large" {
 		errs.add("size", "must be small, medium, large, or extra_large")
@@ -56,12 +56,18 @@ func birthDate(value *string, errs fieldErrors) pgtype.Date {
 }
 
 func animalParams(request animalRequest) database.CreatePrivateAnimalParams {
-	return database.CreatePrivateAnimalParams{
-		Name: request.Name, Species: request.Species, Breed: request.Breed, Sex: request.Sex, Size: request.Size,
+	result := database.CreatePrivateAnimalParams{
+		Attributes: optionalJSON(request.Attributes), Name: request.Name, Species: request.Species, Breed: request.Breed, Sex: request.Sex, Size: request.Size,
 		Description: request.Description, HealthNotes: request.HealthNotes, BehaviorNotes: request.BehaviorNotes,
 		City: request.Location.City, StateCode: request.Location.State, CountryCode: request.Location.CountryCode,
 		Latitude: numeric(request.Location.Latitude), Longitude: numeric(request.Location.Longitude),
 	}
+	if request.Attributes != nil {
+		result.Vaccinated = request.Attributes.Vaccinated
+		result.Neutered = request.Attributes.Neutered
+		result.SpecialNeeds = request.Attributes.SpecialNeeds
+	}
+	return result
 }
 
 func (s *Server) listAnimals(w http.ResponseWriter, r *http.Request) {
@@ -132,9 +138,9 @@ func (s *Server) createAnimal(w http.ResponseWriter, r *http.Request) {
 		member, allowed := s.activeMember(r, orgID, actor)
 		if allowed && member.CanPublishAnimals {
 			animal, err = s.queries.CreateOrganizationAnimal(r.Context(), database.CreateOrganizationAnimalParams{
-				SubmittedBy: actor, ResponsibleOrganizationID: orgID, Name: base.Name, Species: base.Species, Breed: base.Breed,
+				Attributes: base.Attributes, SubmittedBy: actor, ResponsibleOrganizationID: orgID, Name: base.Name, Species: base.Species, Breed: base.Breed,
 				Sex: base.Sex, Size: base.Size, BirthDate: base.BirthDate, Description: base.Description,
-				HealthNotes: base.HealthNotes, BehaviorNotes: base.BehaviorNotes, City: base.City, StateCode: base.StateCode,
+				Vaccinated: base.Vaccinated, Neutered: base.Neutered, SpecialNeeds: base.SpecialNeeds, HealthNotes: base.HealthNotes, BehaviorNotes: base.BehaviorNotes, City: base.City, StateCode: base.StateCode,
 				CountryCode: base.CountryCode, Latitude: base.Latitude, Longitude: base.Longitude,
 			})
 		} else {
@@ -232,7 +238,7 @@ func (s *Server) updateAnimal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	request := animalRequest{
-		Name: patch.Name, Species: patch.Species, Breed: patch.Breed, Size: patch.Size, Sex: patch.Sex,
+		Attributes: patch.Attributes, Name: patch.Name, Species: patch.Species, Breed: patch.Breed, Size: patch.Size, Sex: patch.Sex,
 		ApproximateBirthDate: patch.ApproximateBirthDate, Description: patch.Description,
 		HealthNotes: patch.HealthNotes, BehaviorNotes: patch.BehaviorNotes, Location: patch.Location,
 	}
@@ -272,8 +278,13 @@ func (s *Server) updateAnimal(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, http.StatusUnprocessableEntity, "Validation failed", "review the invalid fields", errs)
 		return
 	}
+	if request.Attributes != nil {
+		current.Vaccinated = request.Attributes.Vaccinated
+		current.Neutered = request.Attributes.Neutered
+		current.SpecialNeeds = request.Attributes.SpecialNeeds
+	}
 	updated, err := s.queries.UpdateAnimalDetails(r.Context(), database.UpdateAnimalDetailsParams{
-		Name: request.Name, Species: request.Species, Breed: request.Breed, Sex: request.Sex, Size: request.Size, BirthDate: date,
+		Attributes: optionalJSON(request.Attributes), Name: request.Name, Species: request.Species, Breed: request.Breed, Sex: request.Sex, Size: request.Size, BirthDate: date,
 		Description: request.Description, HealthNotes: request.HealthNotes, BehaviorNotes: request.BehaviorNotes,
 		Vaccinated: current.Vaccinated, Neutered: current.Neutered, SpecialNeeds: current.SpecialNeeds,
 		City: request.Location.City, StateCode: request.Location.State, CountryCode: request.Location.CountryCode,
@@ -353,6 +364,7 @@ func (s *Server) addAnimalImage(w http.ResponseWriter, r *http.Request) {
 	}
 	errs := fieldErrors{}
 	request.URL = validImageURL(errs, "url", request.URL)
+
 	request.AltText = optional(errs, "alt_text", request.AltText, 300)
 	if request.Position < 0 {
 		errs.add("position", "must not be negative")

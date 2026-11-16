@@ -52,7 +52,7 @@ func (s *Server) listOrganizationAnimals(w http.ResponseWriter, r *http.Request)
 	var status *string
 	if value := strings.TrimSpace(r.URL.Query().Get("status")); value != "" {
 		switch domain.AnimalStatus(value) {
-		case domain.AnimalPending, domain.AnimalAvailable, domain.AnimalInAdoption, domain.AnimalAdopted, domain.AnimalUnavailable, domain.AnimalUnderReview:
+		case domain.AnimalArchived, domain.AnimalPending, domain.AnimalAvailable, domain.AnimalInAdoption, domain.AnimalAdopted, domain.AnimalUnavailable, domain.AnimalUnderReview:
 			status = &value
 		default:
 			writeProblem(w, http.StatusUnprocessableEntity, "Validation failed", "invalid animal status", nil)

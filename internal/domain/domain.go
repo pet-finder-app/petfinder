@@ -14,6 +14,7 @@ const (
 type AnimalStatus string
 
 const (
+	AnimalArchived    AnimalStatus = "archived"
 	AnimalPending     AnimalStatus = "pending_organization"
 	AnimalAvailable   AnimalStatus = "available"
 	AnimalInAdoption  AnimalStatus = "adoption_in_progress"

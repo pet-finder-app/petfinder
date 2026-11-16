@@ -207,7 +207,7 @@ type organizationQuery struct {
 }
 
 type animalQuery struct {
-	Species   string  `json:"species,omitempty" enum:"dog,cat,other"`
+	Species   string  `json:"species,omitempty" enum:"dog,cat,bird,rabbit,reptile,small_mammal,other"`
 	Size      string  `json:"size,omitempty" enum:"small,medium,large,extra_large"`
 	State     string  `json:"state,omitempty"`
 	City      string  `json:"city,omitempty"`
@@ -233,7 +233,7 @@ type messagePaginationQuery struct {
 }
 
 type inventoryQuery struct {
-	Status string `json:"status,omitempty" enum:"pending_organization,available,adoption_in_progress,adopted,unavailable,under_review"`
+	Status string `json:"status,omitempty" enum:"pending_organization,available,adoption_in_progress,adopted,unavailable,under_review,archived"`
 }
 
 type wireJSON struct{}

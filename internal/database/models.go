@@ -61,6 +61,20 @@ type Animal struct {
 	DeletedAt                 pgtype.Timestamptz `db:"deleted_at" json:"deleted_at"`
 	CreatedAt                 pgtype.Timestamptz `db:"created_at" json:"created_at"`
 	UpdatedAt                 pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
+	Attributes                json.RawMessage    `db:"attributes" json:"attributes"`
+}
+
+type AnimalHistory struct {
+	ID                     int64              `db:"id" json:"id"`
+	AnimalID               pgtype.UUID        `db:"animal_id" json:"animal_id"`
+	ActorID                pgtype.UUID        `db:"actor_id" json:"actor_id"`
+	Action                 string             `db:"action" json:"action"`
+	Reason                 string             `db:"reason" json:"reason"`
+	PreviousOrganizationID pgtype.UUID        `db:"previous_organization_id" json:"previous_organization_id"`
+	OrganizationID         pgtype.UUID        `db:"organization_id" json:"organization_id"`
+	FromStatus             string             `db:"from_status" json:"from_status"`
+	ToStatus               string             `db:"to_status" json:"to_status"`
+	CreatedAt              pgtype.Timestamptz `db:"created_at" json:"created_at"`
 }
 
 type AnimalImage struct {

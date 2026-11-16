@@ -74,6 +74,10 @@ func (s *Server) createApplication(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rollbackTransaction(r.Context(), tx)
 	q := database.New(tx)
+	if _, err = tx.Exec(r.Context(), "SELECT id FROM animals WHERE id=$1 FOR UPDATE", animalID); err != nil {
+		handleDBError(w, err)
+		return
+	}
 	application, err := q.CreateAdoptionApplication(r.Context(), database.CreateAdoptionApplicationParams{AdopterID: actor, ApplicantMessage: request.Introduction, AnimalID: animalID})
 	if err != nil {
 		handleDBError(w, err)

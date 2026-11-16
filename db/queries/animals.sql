@@ -1,11 +1,11 @@
 -- name: CreatePrivateAnimal :one
 INSERT INTO animals (
-    submitted_by, responsible_organization_id, source, name, species, breed,
+ attributes, submitted_by, responsible_organization_id, source, name, species, breed,
     sex, size, birth_date, approximate_age_months, description, health_notes,
     behavior_notes, vaccinated, neutered, special_needs, city, state_code,
     country_code, latitude, longitude
 ) VALUES (
-    sqlc.arg(submitted_by), sqlc.narg(responsible_organization_id), 'private_submission',
+ COALESCE(sqlc.narg(attributes)::jsonb, '{}'::jsonb), sqlc.arg(submitted_by), sqlc.narg(responsible_organization_id), 'private_submission',
     sqlc.arg(name), sqlc.arg(species), sqlc.narg(breed), sqlc.arg(sex), sqlc.arg(size),
     sqlc.narg(birth_date), sqlc.narg(approximate_age_months), sqlc.arg(description),
     sqlc.arg(health_notes), sqlc.arg(behavior_notes), sqlc.narg(vaccinated),
@@ -16,13 +16,13 @@ RETURNING *;
 
 -- name: CreateOrganizationAnimal :one
 INSERT INTO animals (
-    submitted_by, responsible_organization_id, source, status,
+ attributes, submitted_by, responsible_organization_id, source, status,
     organization_review_status, reviewed_by, reviewed_at, name, species,
     breed, sex, size, birth_date, approximate_age_months, description,
     health_notes, behavior_notes, vaccinated, neutered, special_needs,
     city, state_code, country_code, latitude, longitude, published_at
 ) VALUES (
-    sqlc.arg(submitted_by), sqlc.arg(responsible_organization_id), 'organization',
+ COALESCE(sqlc.narg(attributes)::jsonb, '{}'::jsonb), sqlc.arg(submitted_by), sqlc.arg(responsible_organization_id), 'organization',
     'available', 'accepted', sqlc.arg(submitted_by), now(), sqlc.arg(name),
     sqlc.arg(species), sqlc.narg(breed), sqlc.arg(sex), sqlc.arg(size),
     sqlc.narg(birth_date), sqlc.narg(approximate_age_months), sqlc.arg(description),
@@ -115,7 +115,7 @@ RETURNING *;
 
 -- name: UpdateAnimalDetails :one
 UPDATE animals
-SET name = sqlc.arg(name), species = sqlc.arg(species), breed = sqlc.narg(breed),
+SET attributes=COALESCE(sqlc.narg(attributes)::jsonb,attributes), name = sqlc.arg(name), species = sqlc.arg(species), breed = sqlc.narg(breed),
     sex = sqlc.arg(sex), size = sqlc.arg(size), birth_date = sqlc.narg(birth_date),
     approximate_age_months = sqlc.narg(approximate_age_months),
     description = sqlc.arg(description), health_notes = sqlc.arg(health_notes),

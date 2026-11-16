@@ -7,6 +7,7 @@ package database
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -55,7 +56,7 @@ WHERE id = $2
   AND status = 'pending_organization'
   AND organization_review_status IN ('pending', 'changes_requested')
   AND deleted_at IS NULL
-RETURNING id, submitted_by, responsible_organization_id, source, status, organization_review_status, organization_review_notes, reviewed_by, reviewed_at, name, species, breed, sex, size, birth_date, approximate_age_months, description, health_notes, behavior_notes, vaccinated, neutered, special_needs, city, state_code, country_code, latitude, longitude, published_at, unavailable_reason, adopted_at, deleted_at, created_at, updated_at
+RETURNING id, submitted_by, responsible_organization_id, source, status, organization_review_status, organization_review_notes, reviewed_by, reviewed_at, name, species, breed, sex, size, birth_date, approximate_age_months, description, health_notes, behavior_notes, vaccinated, neutered, special_needs, city, state_code, country_code, latitude, longitude, published_at, unavailable_reason, adopted_at, deleted_at, created_at, updated_at, attributes
 `
 
 type AssignAnimalOrganizationParams struct {
@@ -100,30 +101,32 @@ func (q *Queries) AssignAnimalOrganization(ctx context.Context, arg AssignAnimal
 		&i.DeletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Attributes,
 	)
 	return i, err
 }
 
 const createOrganizationAnimal = `-- name: CreateOrganizationAnimal :one
 INSERT INTO animals (
-    submitted_by, responsible_organization_id, source, status,
+ attributes, submitted_by, responsible_organization_id, source, status,
     organization_review_status, reviewed_by, reviewed_at, name, species,
     breed, sex, size, birth_date, approximate_age_months, description,
     health_notes, behavior_notes, vaccinated, neutered, special_needs,
     city, state_code, country_code, latitude, longitude, published_at
 ) VALUES (
-    $1, $2, 'organization',
-    'available', 'accepted', $1, now(), $3,
-    $4, $5, $6, $7,
-    $8, $9, $10,
-    $11, $12, $13,
-    $14, $15, $16, $17,
-    $18, $19, $20, now()
+ COALESCE($1::jsonb, '{}'::jsonb), $2, $3, 'organization',
+    'available', 'accepted', $2, now(), $4,
+    $5, $6, $7, $8,
+    $9, $10, $11,
+    $12, $13, $14,
+    $15, $16, $17, $18,
+    $19, $20, $21, now()
 )
-RETURNING id, submitted_by, responsible_organization_id, source, status, organization_review_status, organization_review_notes, reviewed_by, reviewed_at, name, species, breed, sex, size, birth_date, approximate_age_months, description, health_notes, behavior_notes, vaccinated, neutered, special_needs, city, state_code, country_code, latitude, longitude, published_at, unavailable_reason, adopted_at, deleted_at, created_at, updated_at
+RETURNING id, submitted_by, responsible_organization_id, source, status, organization_review_status, organization_review_notes, reviewed_by, reviewed_at, name, species, breed, sex, size, birth_date, approximate_age_months, description, health_notes, behavior_notes, vaccinated, neutered, special_needs, city, state_code, country_code, latitude, longitude, published_at, unavailable_reason, adopted_at, deleted_at, created_at, updated_at, attributes
 `
 
 type CreateOrganizationAnimalParams struct {
+	Attributes                []byte         `db:"attributes" json:"attributes"`
 	SubmittedBy               pgtype.UUID    `db:"submitted_by" json:"submitted_by"`
 	ResponsibleOrganizationID pgtype.UUID    `db:"responsible_organization_id" json:"responsible_organization_id"`
 	Name                      string         `db:"name" json:"name"`
@@ -148,6 +151,7 @@ type CreateOrganizationAnimalParams struct {
 
 func (q *Queries) CreateOrganizationAnimal(ctx context.Context, arg CreateOrganizationAnimalParams) (Animal, error) {
 	row := q.db.QueryRow(ctx, createOrganizationAnimal,
+		arg.Attributes,
 		arg.SubmittedBy,
 		arg.ResponsibleOrganizationID,
 		arg.Name,
@@ -204,28 +208,30 @@ func (q *Queries) CreateOrganizationAnimal(ctx context.Context, arg CreateOrgani
 		&i.DeletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Attributes,
 	)
 	return i, err
 }
 
 const createPrivateAnimal = `-- name: CreatePrivateAnimal :one
 INSERT INTO animals (
-    submitted_by, responsible_organization_id, source, name, species, breed,
+ attributes, submitted_by, responsible_organization_id, source, name, species, breed,
     sex, size, birth_date, approximate_age_months, description, health_notes,
     behavior_notes, vaccinated, neutered, special_needs, city, state_code,
     country_code, latitude, longitude
 ) VALUES (
-    $1, $2, 'private_submission',
-    $3, $4, $5, $6, $7,
-    $8, $9, $10,
-    $11, $12, $13,
-    $14, $15, $16, $17,
-    $18, $19, $20
+ COALESCE($1::jsonb, '{}'::jsonb), $2, $3, 'private_submission',
+    $4, $5, $6, $7, $8,
+    $9, $10, $11,
+    $12, $13, $14,
+    $15, $16, $17, $18,
+    $19, $20, $21
 )
-RETURNING id, submitted_by, responsible_organization_id, source, status, organization_review_status, organization_review_notes, reviewed_by, reviewed_at, name, species, breed, sex, size, birth_date, approximate_age_months, description, health_notes, behavior_notes, vaccinated, neutered, special_needs, city, state_code, country_code, latitude, longitude, published_at, unavailable_reason, adopted_at, deleted_at, created_at, updated_at
+RETURNING id, submitted_by, responsible_organization_id, source, status, organization_review_status, organization_review_notes, reviewed_by, reviewed_at, name, species, breed, sex, size, birth_date, approximate_age_months, description, health_notes, behavior_notes, vaccinated, neutered, special_needs, city, state_code, country_code, latitude, longitude, published_at, unavailable_reason, adopted_at, deleted_at, created_at, updated_at, attributes
 `
 
 type CreatePrivateAnimalParams struct {
+	Attributes                []byte         `db:"attributes" json:"attributes"`
 	SubmittedBy               pgtype.UUID    `db:"submitted_by" json:"submitted_by"`
 	ResponsibleOrganizationID pgtype.UUID    `db:"responsible_organization_id" json:"responsible_organization_id"`
 	Name                      string         `db:"name" json:"name"`
@@ -250,6 +256,7 @@ type CreatePrivateAnimalParams struct {
 
 func (q *Queries) CreatePrivateAnimal(ctx context.Context, arg CreatePrivateAnimalParams) (Animal, error) {
 	row := q.db.QueryRow(ctx, createPrivateAnimal,
+		arg.Attributes,
 		arg.SubmittedBy,
 		arg.ResponsibleOrganizationID,
 		arg.Name,
@@ -306,12 +313,13 @@ func (q *Queries) CreatePrivateAnimal(ctx context.Context, arg CreatePrivateAnim
 		&i.DeletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Attributes,
 	)
 	return i, err
 }
 
 const getAnimalByID = `-- name: GetAnimalByID :one
-SELECT id, submitted_by, responsible_organization_id, source, status, organization_review_status, organization_review_notes, reviewed_by, reviewed_at, name, species, breed, sex, size, birth_date, approximate_age_months, description, health_notes, behavior_notes, vaccinated, neutered, special_needs, city, state_code, country_code, latitude, longitude, published_at, unavailable_reason, adopted_at, deleted_at, created_at, updated_at FROM animals WHERE id = $1 AND deleted_at IS NULL
+SELECT id, submitted_by, responsible_organization_id, source, status, organization_review_status, organization_review_notes, reviewed_by, reviewed_at, name, species, breed, sex, size, birth_date, approximate_age_months, description, health_notes, behavior_notes, vaccinated, neutered, special_needs, city, state_code, country_code, latitude, longitude, published_at, unavailable_reason, adopted_at, deleted_at, created_at, updated_at, attributes FROM animals WHERE id = $1 AND deleted_at IS NULL
 `
 
 func (q *Queries) GetAnimalByID(ctx context.Context, id pgtype.UUID) (Animal, error) {
@@ -351,12 +359,13 @@ func (q *Queries) GetAnimalByID(ctx context.Context, id pgtype.UUID) (Animal, er
 		&i.DeletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Attributes,
 	)
 	return i, err
 }
 
 const getAnimalWithOrganization = `-- name: GetAnimalWithOrganization :one
-SELECT a.id, a.submitted_by, a.responsible_organization_id, a.source, a.status, a.organization_review_status, a.organization_review_notes, a.reviewed_by, a.reviewed_at, a.name, a.species, a.breed, a.sex, a.size, a.birth_date, a.approximate_age_months, a.description, a.health_notes, a.behavior_notes, a.vaccinated, a.neutered, a.special_needs, a.city, a.state_code, a.country_code, a.latitude, a.longitude, a.published_at, a.unavailable_reason, a.adopted_at, a.deleted_at, a.created_at, a.updated_at, o.display_name AS organization_name, o.slug AS organization_slug,
+SELECT a.id, a.submitted_by, a.responsible_organization_id, a.source, a.status, a.organization_review_status, a.organization_review_notes, a.reviewed_by, a.reviewed_at, a.name, a.species, a.breed, a.sex, a.size, a.birth_date, a.approximate_age_months, a.description, a.health_notes, a.behavior_notes, a.vaccinated, a.neutered, a.special_needs, a.city, a.state_code, a.country_code, a.latitude, a.longitude, a.published_at, a.unavailable_reason, a.adopted_at, a.deleted_at, a.created_at, a.updated_at, a.attributes, o.display_name AS organization_name, o.slug AS organization_slug,
        o.verification_status AS organization_verification_status
 FROM animals a
 LEFT JOIN organizations o ON o.id = a.responsible_organization_id
@@ -397,6 +406,7 @@ type GetAnimalWithOrganizationRow struct {
 	DeletedAt                      pgtype.Timestamptz `db:"deleted_at" json:"deleted_at"`
 	CreatedAt                      pgtype.Timestamptz `db:"created_at" json:"created_at"`
 	UpdatedAt                      pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
+	Attributes                     json.RawMessage    `db:"attributes" json:"attributes"`
 	OrganizationName               *string            `db:"organization_name" json:"organization_name"`
 	OrganizationSlug               *string            `db:"organization_slug" json:"organization_slug"`
 	OrganizationVerificationStatus *string            `db:"organization_verification_status" json:"organization_verification_status"`
@@ -439,6 +449,7 @@ func (q *Queries) GetAnimalWithOrganization(ctx context.Context, id pgtype.UUID)
 		&i.DeletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Attributes,
 		&i.OrganizationName,
 		&i.OrganizationSlug,
 		&i.OrganizationVerificationStatus,
@@ -491,7 +502,7 @@ func (q *Queries) ListAnimalImages(ctx context.Context, arg ListAnimalImagesPara
 }
 
 const listAnimalsByOrganization = `-- name: ListAnimalsByOrganization :many
-SELECT id, submitted_by, responsible_organization_id, source, status, organization_review_status, organization_review_notes, reviewed_by, reviewed_at, name, species, breed, sex, size, birth_date, approximate_age_months, description, health_notes, behavior_notes, vaccinated, neutered, special_needs, city, state_code, country_code, latitude, longitude, published_at, unavailable_reason, adopted_at, deleted_at, created_at, updated_at FROM animals
+SELECT id, submitted_by, responsible_organization_id, source, status, organization_review_status, organization_review_notes, reviewed_by, reviewed_at, name, species, breed, sex, size, birth_date, approximate_age_months, description, health_notes, behavior_notes, vaccinated, neutered, special_needs, city, state_code, country_code, latitude, longitude, published_at, unavailable_reason, adopted_at, deleted_at, created_at, updated_at, attributes FROM animals
 WHERE responsible_organization_id = $1
   AND deleted_at IS NULL
   AND ($2::text IS NULL OR status = $2)
@@ -554,6 +565,7 @@ func (q *Queries) ListAnimalsByOrganization(ctx context.Context, arg ListAnimals
 			&i.DeletedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Attributes,
 		); err != nil {
 			return nil, err
 		}
@@ -566,7 +578,7 @@ func (q *Queries) ListAnimalsByOrganization(ctx context.Context, arg ListAnimals
 }
 
 const listAnimalsBySubmitter = `-- name: ListAnimalsBySubmitter :many
-SELECT id, submitted_by, responsible_organization_id, source, status, organization_review_status, organization_review_notes, reviewed_by, reviewed_at, name, species, breed, sex, size, birth_date, approximate_age_months, description, health_notes, behavior_notes, vaccinated, neutered, special_needs, city, state_code, country_code, latitude, longitude, published_at, unavailable_reason, adopted_at, deleted_at, created_at, updated_at FROM animals
+SELECT id, submitted_by, responsible_organization_id, source, status, organization_review_status, organization_review_notes, reviewed_by, reviewed_at, name, species, breed, sex, size, birth_date, approximate_age_months, description, health_notes, behavior_notes, vaccinated, neutered, special_needs, city, state_code, country_code, latitude, longitude, published_at, unavailable_reason, adopted_at, deleted_at, created_at, updated_at, attributes FROM animals
 WHERE submitted_by = $1
   AND deleted_at IS NULL
 ORDER BY created_at DESC, id
@@ -622,6 +634,7 @@ func (q *Queries) ListAnimalsBySubmitter(ctx context.Context, arg ListAnimalsByS
 			&i.DeletedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Attributes,
 		); err != nil {
 			return nil, err
 		}
@@ -634,7 +647,7 @@ func (q *Queries) ListAnimalsBySubmitter(ctx context.Context, arg ListAnimalsByS
 }
 
 const listAvailableAnimals = `-- name: ListAvailableAnimals :many
-SELECT a.id, a.submitted_by, a.responsible_organization_id, a.source, a.status, a.organization_review_status, a.organization_review_notes, a.reviewed_by, a.reviewed_at, a.name, a.species, a.breed, a.sex, a.size, a.birth_date, a.approximate_age_months, a.description, a.health_notes, a.behavior_notes, a.vaccinated, a.neutered, a.special_needs, a.city, a.state_code, a.country_code, a.latitude, a.longitude, a.published_at, a.unavailable_reason, a.adopted_at, a.deleted_at, a.created_at, a.updated_at, o.display_name AS organization_name, o.slug AS organization_slug,
+SELECT a.id, a.submitted_by, a.responsible_organization_id, a.source, a.status, a.organization_review_status, a.organization_review_notes, a.reviewed_by, a.reviewed_at, a.name, a.species, a.breed, a.sex, a.size, a.birth_date, a.approximate_age_months, a.description, a.health_notes, a.behavior_notes, a.vaccinated, a.neutered, a.special_needs, a.city, a.state_code, a.country_code, a.latitude, a.longitude, a.published_at, a.unavailable_reason, a.adopted_at, a.deleted_at, a.created_at, a.updated_at, a.attributes, o.display_name AS organization_name, o.slug AS organization_slug,
        CASE
            WHEN $1::numeric IS NULL
              OR $2::numeric IS NULL
@@ -708,6 +721,7 @@ type ListAvailableAnimalsRow struct {
 	DeletedAt                 pgtype.Timestamptz `db:"deleted_at" json:"deleted_at"`
 	CreatedAt                 pgtype.Timestamptz `db:"created_at" json:"created_at"`
 	UpdatedAt                 pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
+	Attributes                json.RawMessage    `db:"attributes" json:"attributes"`
 	OrganizationName          string             `db:"organization_name" json:"organization_name"`
 	OrganizationSlug          string             `db:"organization_slug" json:"organization_slug"`
 	DistanceScore             interface{}        `db:"distance_score" json:"distance_score"`
@@ -766,6 +780,7 @@ func (q *Queries) ListAvailableAnimals(ctx context.Context, arg ListAvailableAni
 			&i.DeletedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Attributes,
 			&i.OrganizationName,
 			&i.OrganizationSlug,
 			&i.DistanceScore,
@@ -854,7 +869,7 @@ WHERE id = $4
   AND source = 'private_submission'
   AND status = 'pending_organization'
   AND deleted_at IS NULL
-RETURNING id, submitted_by, responsible_organization_id, source, status, organization_review_status, organization_review_notes, reviewed_by, reviewed_at, name, species, breed, sex, size, birth_date, approximate_age_months, description, health_notes, behavior_notes, vaccinated, neutered, special_needs, city, state_code, country_code, latitude, longitude, published_at, unavailable_reason, adopted_at, deleted_at, created_at, updated_at
+RETURNING id, submitted_by, responsible_organization_id, source, status, organization_review_status, organization_review_notes, reviewed_by, reviewed_at, name, species, breed, sex, size, birth_date, approximate_age_months, description, health_notes, behavior_notes, vaccinated, neutered, special_needs, city, state_code, country_code, latitude, longitude, published_at, unavailable_reason, adopted_at, deleted_at, created_at, updated_at, attributes
 `
 
 type ReviewAnimalSubmissionParams struct {
@@ -908,6 +923,7 @@ func (q *Queries) ReviewAnimalSubmission(ctx context.Context, arg ReviewAnimalSu
 		&i.DeletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Attributes,
 	)
 	return i, err
 }
@@ -923,7 +939,7 @@ SET status = $1,
 WHERE id = $3
   AND responsible_organization_id = $4
   AND deleted_at IS NULL
-RETURNING id, submitted_by, responsible_organization_id, source, status, organization_review_status, organization_review_notes, reviewed_by, reviewed_at, name, species, breed, sex, size, birth_date, approximate_age_months, description, health_notes, behavior_notes, vaccinated, neutered, special_needs, city, state_code, country_code, latitude, longitude, published_at, unavailable_reason, adopted_at, deleted_at, created_at, updated_at
+RETURNING id, submitted_by, responsible_organization_id, source, status, organization_review_status, organization_review_notes, reviewed_by, reviewed_at, name, species, breed, sex, size, birth_date, approximate_age_months, description, health_notes, behavior_notes, vaccinated, neutered, special_needs, city, state_code, country_code, latitude, longitude, published_at, unavailable_reason, adopted_at, deleted_at, created_at, updated_at, attributes
 `
 
 type SetAnimalStatusParams struct {
@@ -975,6 +991,7 @@ func (q *Queries) SetAnimalStatus(ctx context.Context, arg SetAnimalStatusParams
 		&i.DeletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Attributes,
 	)
 	return i, err
 }
@@ -1000,20 +1017,21 @@ func (q *Queries) SoftDeleteAnimal(ctx context.Context, arg SoftDeleteAnimalPara
 
 const updateAnimalDetails = `-- name: UpdateAnimalDetails :one
 UPDATE animals
-SET name = $1, species = $2, breed = $3,
-    sex = $4, size = $5, birth_date = $6,
-    approximate_age_months = $7,
-    description = $8, health_notes = $9,
-    behavior_notes = $10, vaccinated = $11,
-    neutered = $12, special_needs = $13,
-    city = $14, state_code = $15,
-    country_code = $16, latitude = $17,
-    longitude = $18
-WHERE id = $19 AND deleted_at IS NULL AND status <> 'adopted'
-RETURNING id, submitted_by, responsible_organization_id, source, status, organization_review_status, organization_review_notes, reviewed_by, reviewed_at, name, species, breed, sex, size, birth_date, approximate_age_months, description, health_notes, behavior_notes, vaccinated, neutered, special_needs, city, state_code, country_code, latitude, longitude, published_at, unavailable_reason, adopted_at, deleted_at, created_at, updated_at
+SET attributes=COALESCE($1::jsonb,attributes), name = $2, species = $3, breed = $4,
+    sex = $5, size = $6, birth_date = $7,
+    approximate_age_months = $8,
+    description = $9, health_notes = $10,
+    behavior_notes = $11, vaccinated = $12,
+    neutered = $13, special_needs = $14,
+    city = $15, state_code = $16,
+    country_code = $17, latitude = $18,
+    longitude = $19
+WHERE id = $20 AND deleted_at IS NULL AND status <> 'adopted'
+RETURNING id, submitted_by, responsible_organization_id, source, status, organization_review_status, organization_review_notes, reviewed_by, reviewed_at, name, species, breed, sex, size, birth_date, approximate_age_months, description, health_notes, behavior_notes, vaccinated, neutered, special_needs, city, state_code, country_code, latitude, longitude, published_at, unavailable_reason, adopted_at, deleted_at, created_at, updated_at, attributes
 `
 
 type UpdateAnimalDetailsParams struct {
+	Attributes           []byte         `db:"attributes" json:"attributes"`
 	Name                 string         `db:"name" json:"name"`
 	Species              string         `db:"species" json:"species"`
 	Breed                *string        `db:"breed" json:"breed"`
@@ -1037,6 +1055,7 @@ type UpdateAnimalDetailsParams struct {
 
 func (q *Queries) UpdateAnimalDetails(ctx context.Context, arg UpdateAnimalDetailsParams) (Animal, error) {
 	row := q.db.QueryRow(ctx, updateAnimalDetails,
+		arg.Attributes,
 		arg.Name,
 		arg.Species,
 		arg.Breed,
@@ -1092,6 +1111,7 @@ func (q *Queries) UpdateAnimalDetails(ctx context.Context, arg UpdateAnimalDetai
 		&i.DeletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Attributes,
 	)
 	return i, err
 }
