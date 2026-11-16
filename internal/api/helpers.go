@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -91,6 +92,7 @@ func userView(user database.User, roles []database.Role) userResponse {
 		location = &locationResponse{City: user.City, State: user.StateCode, CountryCode: user.CountryCode}
 	}
 	return userResponse{
+		Profile: decodePersonalProfile(user.PersonalProfile), VerificationStatus: user.PersonalVerificationStatus,
 		ID: uuidString(user.ID), Name: user.DisplayName, Email: user.Email,
 		Phone: user.Phone, Roles: roleNames, Location: location,
 		CreatedAt: timestamp(user.CreatedAt), UpdatedAt: timestamp(user.UpdatedAt),
@@ -98,14 +100,18 @@ func userView(user database.User, roles []database.Role) userResponse {
 }
 
 func organizationView(org database.Organization, privileged bool) organizationResponse {
-	result := organizationResponse{
+	result := organizationResponse{Slug: org.Slug,
 		ID: uuidString(org.ID), Name: org.DisplayName, Description: org.Description,
 		VerificationStatus: org.VerificationStatus, VerifiedAt: timestamp(org.VerifiedAt),
 		OfficialChannels: officialChannelsResponse{Website: org.WebsiteUrl, Email: org.OfficialEmail, Phone: org.OfficialPhone},
 		Location:         locationResponse{City: &org.City, State: &org.StateCode, CountryCode: org.CountryCode},
 		CreatedAt:        timestamp(org.CreatedAt), UpdatedAt: timestamp(org.UpdatedAt),
 	}
+	_ = json.Unmarshal(org.PublicProfile, &result.Profile)
 	if privileged {
+		var private organizationPrivateProfile
+		_ = json.Unmarshal(org.PrivateProfile, &private)
+		result.PrivateProfile = &private
 		result.LegalName = &org.LegalName
 		result.RegistrationNumber = &org.RegistrationNumber
 		result.VerificationNotes = &org.VerificationNotes
@@ -224,4 +230,10 @@ func slugify(value string) string {
 		}
 	}
 	return strings.Trim(b.String(), "-")
+}
+
+func decodePersonalProfile(data []byte) personalProfile {
+	var result personalProfile
+	_ = json.Unmarshal(data, &result)
+	return result
 }

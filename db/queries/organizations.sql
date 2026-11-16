@@ -36,7 +36,11 @@ LIMIT sqlc.arg(page_size)::int OFFSET sqlc.arg(page_offset)::int;
 
 -- name: UpdateOrganizationProfile :one
 UPDATE organizations
-SET display_name = sqlc.arg(display_name),
+SET slug = COALESCE(sqlc.narg(slug)::citext, slug),
+ public_profile = COALESCE(sqlc.narg(public_profile)::jsonb, public_profile),
+ private_profile = COALESCE(sqlc.narg(private_profile)::jsonb, private_profile),
+ verification_status=CASE WHEN sqlc.narg(private_profile)::jsonb IS NOT NULL THEN 'pending' ELSE verification_status END,
+ display_name = sqlc.arg(display_name),
     description = sqlc.arg(description),
     official_email = sqlc.arg(official_email),
     official_phone = sqlc.narg(official_phone),

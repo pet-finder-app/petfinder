@@ -239,7 +239,10 @@ func (s *Server) updateProfile(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, http.StatusUnprocessableEntity, "Validation failed", "review the invalid fields", errs)
 		return
 	}
-	user, err := s.queries.UpdateUserProfile(r.Context(), database.UpdateUserProfileParams{DisplayName: name, Phone: phone, City: city, StateCode: state, CountryCode: country, Latitude: lat, Longitude: lng, ID: id})
+	if request.Profile != nil && !validatePersonalProfile(w, request.Profile) {
+		return
+	}
+	user, err := s.queries.UpdateUserProfile(r.Context(), database.UpdateUserProfileParams{PersonalProfile: optionalJSON(request.Profile), DisplayName: name, Phone: phone, City: city, StateCode: state, CountryCode: country, Latitude: lat, Longitude: lng, ID: id})
 	if err != nil {
 		handleDBError(w, err)
 		return

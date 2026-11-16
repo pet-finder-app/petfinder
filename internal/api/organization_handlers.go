@@ -180,7 +180,25 @@ func (s *Server) updateOrganization(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, http.StatusUnprocessableEntity, "Validation failed", "review the invalid fields", errs)
 		return
 	}
-	org, err := s.queries.UpdateOrganizationProfile(r.Context(), database.UpdateOrganizationProfileParams{DisplayName: name, Description: description, OfficialEmail: email, OfficialPhone: phone, WebsiteUrl: website, City: city, StateCode: state, CountryCode: country, Latitude: lat, Longitude: lng, ID: id})
+	if request.Profile != nil {
+		links := append([]string{}, request.Profile.Gallery...)
+		if request.Profile.LogoURL != "" {
+			links = append(links, request.Profile.LogoURL)
+		}
+		if !validateLinks(w, links) {
+			return
+		}
+	}
+	if request.PrivateProfile != nil {
+		if request.PrivateProfile.RepresentativeCPF != "" && !validCPF(request.PrivateProfile.RepresentativeCPF) {
+			writeServiceError(w, ErrInvalid)
+			return
+		}
+		if !validateLinks(w, request.PrivateProfile.Documents) {
+			return
+		}
+	}
+	org, err := s.queries.UpdateOrganizationProfile(r.Context(), database.UpdateOrganizationProfileParams{Slug: request.Slug, PublicProfile: optionalJSON(request.Profile), PrivateProfile: optionalJSON(request.PrivateProfile), DisplayName: name, Description: description, OfficialEmail: email, OfficialPhone: phone, WebsiteUrl: website, City: city, StateCode: state, CountryCode: country, Latitude: lat, Longitude: lng, ID: id})
 	if err != nil {
 		handleDBError(w, err)
 		return

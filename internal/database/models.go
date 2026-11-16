@@ -223,6 +223,8 @@ type Organization struct {
 	CreatedBy          pgtype.UUID        `db:"created_by" json:"created_by"`
 	CreatedAt          pgtype.Timestamptz `db:"created_at" json:"created_at"`
 	UpdatedAt          pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
+	PublicProfile      json.RawMessage    `db:"public_profile" json:"public_profile"`
+	PrivateProfile     json.RawMessage    `db:"private_profile" json:"private_profile"`
 }
 
 type OrganizationMember struct {
@@ -306,24 +308,26 @@ type Role struct {
 }
 
 type User struct {
-	ID                pgtype.UUID        `db:"id" json:"id"`
-	Email             string             `db:"email" json:"email"`
-	PasswordHash      string             `db:"password_hash" json:"password_hash"`
-	DisplayName       string             `db:"display_name" json:"display_name"`
-	Phone             *string            `db:"phone" json:"phone"`
-	City              *string            `db:"city" json:"city"`
-	StateCode         *string            `db:"state_code" json:"state_code"`
-	CountryCode       string             `db:"country_code" json:"country_code"`
-	Latitude          pgtype.Numeric     `db:"latitude" json:"latitude"`
-	Longitude         pgtype.Numeric     `db:"longitude" json:"longitude"`
-	TermsAcceptedAt   pgtype.Timestamptz `db:"terms_accepted_at" json:"terms_accepted_at"`
-	PrivacyAcceptedAt pgtype.Timestamptz `db:"privacy_accepted_at" json:"privacy_accepted_at"`
-	EmailVerifiedAt   pgtype.Timestamptz `db:"email_verified_at" json:"email_verified_at"`
-	DeactivatedAt     pgtype.Timestamptz `db:"deactivated_at" json:"deactivated_at"`
-	DeletedAt         pgtype.Timestamptz `db:"deleted_at" json:"deleted_at"`
-	CreatedAt         pgtype.Timestamptz `db:"created_at" json:"created_at"`
-	UpdatedAt         pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
-	AuthVersion       int32              `db:"auth_version" json:"auth_version"`
+	ID                         pgtype.UUID        `db:"id" json:"id"`
+	Email                      string             `db:"email" json:"email"`
+	PasswordHash               string             `db:"password_hash" json:"password_hash"`
+	DisplayName                string             `db:"display_name" json:"display_name"`
+	Phone                      *string            `db:"phone" json:"phone"`
+	City                       *string            `db:"city" json:"city"`
+	StateCode                  *string            `db:"state_code" json:"state_code"`
+	CountryCode                string             `db:"country_code" json:"country_code"`
+	Latitude                   pgtype.Numeric     `db:"latitude" json:"latitude"`
+	Longitude                  pgtype.Numeric     `db:"longitude" json:"longitude"`
+	TermsAcceptedAt            pgtype.Timestamptz `db:"terms_accepted_at" json:"terms_accepted_at"`
+	PrivacyAcceptedAt          pgtype.Timestamptz `db:"privacy_accepted_at" json:"privacy_accepted_at"`
+	EmailVerifiedAt            pgtype.Timestamptz `db:"email_verified_at" json:"email_verified_at"`
+	DeactivatedAt              pgtype.Timestamptz `db:"deactivated_at" json:"deactivated_at"`
+	DeletedAt                  pgtype.Timestamptz `db:"deleted_at" json:"deleted_at"`
+	CreatedAt                  pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	UpdatedAt                  pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
+	AuthVersion                int32              `db:"auth_version" json:"auth_version"`
+	PersonalProfile            json.RawMessage    `db:"personal_profile" json:"personal_profile"`
+	PersonalVerificationStatus string             `db:"personal_verification_status" json:"personal_verification_status"`
 }
 
 type UserRole struct {
@@ -331,4 +335,18 @@ type UserRole struct {
 	RoleID    pgtype.UUID        `db:"role_id" json:"role_id"`
 	GrantedBy pgtype.UUID        `db:"granted_by" json:"granted_by"`
 	GrantedAt pgtype.Timestamptz `db:"granted_at" json:"granted_at"`
+}
+
+type VerificationSubmission struct {
+	ID             pgtype.UUID        `db:"id" json:"id"`
+	UserID         pgtype.UUID        `db:"user_id" json:"user_id"`
+	OrganizationID pgtype.UUID        `db:"organization_id" json:"organization_id"`
+	TargetSnapshot json.RawMessage    `db:"target_snapshot" json:"target_snapshot"`
+	Evidence       json.RawMessage    `db:"evidence" json:"evidence"`
+	Status         string             `db:"status" json:"status"`
+	SubmittedBy    pgtype.UUID        `db:"submitted_by" json:"submitted_by"`
+	ReviewedBy     pgtype.UUID        `db:"reviewed_by" json:"reviewed_by"`
+	Reason         *string            `db:"reason" json:"reason"`
+	CreatedAt      pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	ReviewedAt     pgtype.Timestamptz `db:"reviewed_at" json:"reviewed_at"`
 }

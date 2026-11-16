@@ -22,7 +22,9 @@ WHERE email = sqlc.arg(email)
 
 -- name: UpdateUserProfile :one
 UPDATE users
-SET display_name = sqlc.arg(display_name),
+SET personal_profile = COALESCE(sqlc.narg(personal_profile)::jsonb, personal_profile),
+ personal_verification_status = CASE WHEN sqlc.narg(personal_profile)::jsonb IS NOT NULL THEN 'unverified' ELSE personal_verification_status END,
+ display_name = sqlc.arg(display_name),
     phone = sqlc.narg(phone),
     city = sqlc.narg(city),
     state_code = sqlc.narg(state_code),

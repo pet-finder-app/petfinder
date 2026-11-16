@@ -7,6 +7,7 @@ package database
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -56,7 +57,7 @@ INSERT INTO organizations (
     $10, $11, $12,
     $13, $14
 )
-RETURNING id, legal_name, display_name, slug, registration_number, description, official_email, official_phone, website_url, city, state_code, country_code, latitude, longitude, verification_status, verification_notes, verified_by, verified_at, deactivated_at, created_by, created_at, updated_at
+RETURNING id, legal_name, display_name, slug, registration_number, description, official_email, official_phone, website_url, city, state_code, country_code, latitude, longitude, verification_status, verification_notes, verified_by, verified_at, deactivated_at, created_by, created_at, updated_at, public_profile, private_profile
 `
 
 type CreateOrganizationParams struct {
@@ -117,6 +118,8 @@ func (q *Queries) CreateOrganization(ctx context.Context, arg CreateOrganization
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PublicProfile,
+		&i.PrivateProfile,
 	)
 	return i, err
 }
@@ -170,7 +173,7 @@ func (q *Queries) GetActiveOrganizationMember(ctx context.Context, arg GetActive
 }
 
 const getOrganizationByID = `-- name: GetOrganizationByID :one
-SELECT id, legal_name, display_name, slug, registration_number, description, official_email, official_phone, website_url, city, state_code, country_code, latitude, longitude, verification_status, verification_notes, verified_by, verified_at, deactivated_at, created_by, created_at, updated_at FROM organizations WHERE id = $1
+SELECT id, legal_name, display_name, slug, registration_number, description, official_email, official_phone, website_url, city, state_code, country_code, latitude, longitude, verification_status, verification_notes, verified_by, verified_at, deactivated_at, created_by, created_at, updated_at, public_profile, private_profile FROM organizations WHERE id = $1
 `
 
 func (q *Queries) GetOrganizationByID(ctx context.Context, id pgtype.UUID) (Organization, error) {
@@ -199,12 +202,14 @@ func (q *Queries) GetOrganizationByID(ctx context.Context, id pgtype.UUID) (Orga
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PublicProfile,
+		&i.PrivateProfile,
 	)
 	return i, err
 }
 
 const getPublicOrganizationBySlug = `-- name: GetPublicOrganizationBySlug :one
-SELECT o.id, o.legal_name, o.display_name, o.slug, o.registration_number, o.description, o.official_email, o.official_phone, o.website_url, o.city, o.state_code, o.country_code, o.latitude, o.longitude, o.verification_status, o.verification_notes, o.verified_by, o.verified_at, o.deactivated_at, o.created_by, o.created_at, o.updated_at,
+SELECT o.id, o.legal_name, o.display_name, o.slug, o.registration_number, o.description, o.official_email, o.official_phone, o.website_url, o.city, o.state_code, o.country_code, o.latitude, o.longitude, o.verification_status, o.verification_notes, o.verified_by, o.verified_at, o.deactivated_at, o.created_by, o.created_at, o.updated_at, o.public_profile, o.private_profile,
        count(a.id) FILTER (WHERE a.status = 'available' AND a.deleted_at IS NULL) AS available_animals
 FROM organizations o
 LEFT JOIN animals a ON a.responsible_organization_id = o.id
@@ -237,6 +242,8 @@ type GetPublicOrganizationBySlugRow struct {
 	CreatedBy          pgtype.UUID        `db:"created_by" json:"created_by"`
 	CreatedAt          pgtype.Timestamptz `db:"created_at" json:"created_at"`
 	UpdatedAt          pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
+	PublicProfile      json.RawMessage    `db:"public_profile" json:"public_profile"`
+	PrivateProfile     json.RawMessage    `db:"private_profile" json:"private_profile"`
 	AvailableAnimals   int64              `db:"available_animals" json:"available_animals"`
 }
 
@@ -266,6 +273,8 @@ func (q *Queries) GetPublicOrganizationBySlug(ctx context.Context, slug string) 
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PublicProfile,
+		&i.PrivateProfile,
 		&i.AvailableAnimals,
 	)
 	return i, err
@@ -323,7 +332,7 @@ func (q *Queries) InviteOrganizationMember(ctx context.Context, arg InviteOrgani
 }
 
 const listMemberOrganizations = `-- name: ListMemberOrganizations :many
-SELECT o.id, o.legal_name, o.display_name, o.slug, o.registration_number, o.description, o.official_email, o.official_phone, o.website_url, o.city, o.state_code, o.country_code, o.latitude, o.longitude, o.verification_status, o.verification_notes, o.verified_by, o.verified_at, o.deactivated_at, o.created_by, o.created_at, o.updated_at, om.status AS membership_status, om.member_role
+SELECT o.id, o.legal_name, o.display_name, o.slug, o.registration_number, o.description, o.official_email, o.official_phone, o.website_url, o.city, o.state_code, o.country_code, o.latitude, o.longitude, o.verification_status, o.verification_notes, o.verified_by, o.verified_at, o.deactivated_at, o.created_by, o.created_at, o.updated_at, o.public_profile, o.private_profile, om.status AS membership_status, om.member_role
 FROM organizations o
 JOIN organization_members om ON om.organization_id = o.id
 WHERE om.user_id = $1
@@ -377,6 +386,8 @@ func (q *Queries) ListMemberOrganizations(ctx context.Context, arg ListMemberOrg
 			&i.Organization.CreatedBy,
 			&i.Organization.CreatedAt,
 			&i.Organization.UpdatedAt,
+			&i.Organization.PublicProfile,
+			&i.Organization.PrivateProfile,
 			&i.MembershipStatus,
 			&i.MemberRole,
 		); err != nil {
@@ -459,7 +470,7 @@ func (q *Queries) ListOrganizationMembers(ctx context.Context, arg ListOrganizat
 }
 
 const listVerifiedOrganizations = `-- name: ListVerifiedOrganizations :many
-SELECT id, legal_name, display_name, slug, registration_number, description, official_email, official_phone, website_url, city, state_code, country_code, latitude, longitude, verification_status, verification_notes, verified_by, verified_at, deactivated_at, created_by, created_at, updated_at FROM organizations
+SELECT id, legal_name, display_name, slug, registration_number, description, official_email, official_phone, website_url, city, state_code, country_code, latitude, longitude, verification_status, verification_notes, verified_by, verified_at, deactivated_at, created_by, created_at, updated_at, public_profile, private_profile FROM organizations
 WHERE verification_status = 'verified'
   AND deactivated_at IS NULL
   AND ($1::text IS NULL OR state_code = $1)
@@ -512,6 +523,8 @@ func (q *Queries) ListVerifiedOrganizations(ctx context.Context, arg ListVerifie
 			&i.CreatedBy,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.PublicProfile,
+			&i.PrivateProfile,
 		); err != nil {
 			return nil, err
 		}
@@ -549,7 +562,7 @@ SET verification_status = $1,
     verified_by = CASE WHEN $1::text = 'verified' THEN $3 ELSE verified_by END,
     verified_at = CASE WHEN $1::text = 'verified' THEN now() ELSE verified_at END
 WHERE id = $4 AND deactivated_at IS NULL
-RETURNING id, legal_name, display_name, slug, registration_number, description, official_email, official_phone, website_url, city, state_code, country_code, latitude, longitude, verification_status, verification_notes, verified_by, verified_at, deactivated_at, created_by, created_at, updated_at
+RETURNING id, legal_name, display_name, slug, registration_number, description, official_email, official_phone, website_url, city, state_code, country_code, latitude, longitude, verification_status, verification_notes, verified_by, verified_at, deactivated_at, created_by, created_at, updated_at, public_profile, private_profile
 `
 
 type SetOrganizationVerificationParams struct {
@@ -590,6 +603,8 @@ func (q *Queries) SetOrganizationVerification(ctx context.Context, arg SetOrgani
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PublicProfile,
+		&i.PrivateProfile,
 	)
 	return i, err
 }
@@ -643,36 +658,46 @@ func (q *Queries) UpdateOrganizationMemberPermissions(ctx context.Context, arg U
 
 const updateOrganizationProfile = `-- name: UpdateOrganizationProfile :one
 UPDATE organizations
-SET display_name = $1,
-    description = $2,
-    official_email = $3,
-    official_phone = $4,
-    website_url = $5,
-    city = $6,
-    state_code = $7,
-    country_code = $8,
-    latitude = $9,
-    longitude = $10
-WHERE id = $11 AND deactivated_at IS NULL
-RETURNING id, legal_name, display_name, slug, registration_number, description, official_email, official_phone, website_url, city, state_code, country_code, latitude, longitude, verification_status, verification_notes, verified_by, verified_at, deactivated_at, created_by, created_at, updated_at
+SET slug = COALESCE($1::citext, slug),
+ public_profile = COALESCE($2::jsonb, public_profile),
+ private_profile = COALESCE($3::jsonb, private_profile),
+ verification_status=CASE WHEN $3::jsonb IS NOT NULL THEN 'pending' ELSE verification_status END,
+ display_name = $4,
+    description = $5,
+    official_email = $6,
+    official_phone = $7,
+    website_url = $8,
+    city = $9,
+    state_code = $10,
+    country_code = $11,
+    latitude = $12,
+    longitude = $13
+WHERE id = $14 AND deactivated_at IS NULL
+RETURNING id, legal_name, display_name, slug, registration_number, description, official_email, official_phone, website_url, city, state_code, country_code, latitude, longitude, verification_status, verification_notes, verified_by, verified_at, deactivated_at, created_by, created_at, updated_at, public_profile, private_profile
 `
 
 type UpdateOrganizationProfileParams struct {
-	DisplayName   string         `db:"display_name" json:"display_name"`
-	Description   string         `db:"description" json:"description"`
-	OfficialEmail string         `db:"official_email" json:"official_email"`
-	OfficialPhone *string        `db:"official_phone" json:"official_phone"`
-	WebsiteUrl    *string        `db:"website_url" json:"website_url"`
-	City          string         `db:"city" json:"city"`
-	StateCode     string         `db:"state_code" json:"state_code"`
-	CountryCode   string         `db:"country_code" json:"country_code"`
-	Latitude      pgtype.Numeric `db:"latitude" json:"latitude"`
-	Longitude     pgtype.Numeric `db:"longitude" json:"longitude"`
-	ID            pgtype.UUID    `db:"id" json:"id"`
+	Slug           *string        `db:"slug" json:"slug"`
+	PublicProfile  []byte         `db:"public_profile" json:"public_profile"`
+	PrivateProfile []byte         `db:"private_profile" json:"private_profile"`
+	DisplayName    string         `db:"display_name" json:"display_name"`
+	Description    string         `db:"description" json:"description"`
+	OfficialEmail  string         `db:"official_email" json:"official_email"`
+	OfficialPhone  *string        `db:"official_phone" json:"official_phone"`
+	WebsiteUrl     *string        `db:"website_url" json:"website_url"`
+	City           string         `db:"city" json:"city"`
+	StateCode      string         `db:"state_code" json:"state_code"`
+	CountryCode    string         `db:"country_code" json:"country_code"`
+	Latitude       pgtype.Numeric `db:"latitude" json:"latitude"`
+	Longitude      pgtype.Numeric `db:"longitude" json:"longitude"`
+	ID             pgtype.UUID    `db:"id" json:"id"`
 }
 
 func (q *Queries) UpdateOrganizationProfile(ctx context.Context, arg UpdateOrganizationProfileParams) (Organization, error) {
 	row := q.db.QueryRow(ctx, updateOrganizationProfile,
+		arg.Slug,
+		arg.PublicProfile,
+		arg.PrivateProfile,
 		arg.DisplayName,
 		arg.Description,
 		arg.OfficialEmail,
@@ -709,6 +734,8 @@ func (q *Queries) UpdateOrganizationProfile(ctx context.Context, arg UpdateOrgan
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PublicProfile,
+		&i.PrivateProfile,
 	)
 	return i, err
 }

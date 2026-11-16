@@ -63,5 +63,6 @@ func registerRoutes(s *Server, mux *http.ServeMux) *huma.OpenAPI {
 	registerRoute[forgotPasswordRequest, noBody](reg, "POST", "/v1/auth/forgot-password", "requestPasswordReset", "Email a password recovery link", "Authentication", 202, http.HandlerFunc(s.forgotPassword))
 	registerRoute[resetPasswordRequest, noBody](reg, "POST", "/v1/auth/reset-password", "resetPassword", "Consume a single-use recovery token", "Authentication", 204, http.HandlerFunc(s.resetPassword))
 	registerRoute[deleteAccountRequest, noBody](reg, "DELETE", "/v1/me", "deleteAccount", "Deactivate your account and revoke sessions", "Profile", 204, s.protected(s.deleteAccount), bearerAuth(false))
+	registerProfileRoutes(s, reg)
 	return reg.spec
 }

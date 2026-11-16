@@ -27,9 +27,10 @@ type refreshRequest struct {
 }
 
 type updateProfileRequest struct {
-	Name     *string        `json:"name,omitempty" minLength:"2" maxLength:"120"`
-	Phone    *string        `json:"phone,omitempty" maxLength:"30"`
-	Location *locationInput `json:"location,omitempty"`
+	Profile  *personalProfile `json:"profile,omitempty"`
+	Name     *string          `json:"name,omitempty" minLength:"2" maxLength:"120"`
+	Phone    *string          `json:"phone,omitempty" maxLength:"30"`
+	Location *locationInput   `json:"location,omitempty"`
 }
 
 type locationInput struct {
@@ -62,10 +63,13 @@ type updateOfficialChannels struct {
 }
 
 type updateOrganizationRequest struct {
-	Name             *string                 `json:"name,omitempty" minLength:"2" maxLength:"120"`
-	Description      *string                 `json:"description,omitempty" minLength:"20" maxLength:"2000"`
-	OfficialChannels *updateOfficialChannels `json:"official_channels,omitempty"`
-	Location         *locationInput          `json:"location,omitempty"`
+	Slug             *string                     `json:"slug,omitempty" pattern:"^[a-z0-9]+(-[a-z0-9]+)*$" maxLength:"120"`
+	Profile          *organizationPublicProfile  `json:"profile,omitempty"`
+	PrivateProfile   *organizationPrivateProfile `json:"private_profile,omitempty"`
+	Name             *string                     `json:"name,omitempty" minLength:"2" maxLength:"120"`
+	Description      *string                     `json:"description,omitempty" minLength:"20" maxLength:"2000"`
+	OfficialChannels *updateOfficialChannels     `json:"official_channels,omitempty"`
+	Location         *locationInput              `json:"location,omitempty"`
 }
 
 type organizationVerificationRequest struct {
@@ -201,14 +205,16 @@ type locationResponse struct {
 }
 
 type userResponse struct {
-	ID        string            `json:"id" format:"uuid"`
-	Name      string            `json:"name"`
-	Email     string            `json:"email" format:"email"`
-	Phone     *string           `json:"phone"`
-	Roles     []string          `json:"roles"`
-	Location  *locationResponse `json:"location"`
-	CreatedAt *time.Time        `json:"created_at"`
-	UpdatedAt *time.Time        `json:"updated_at"`
+	Profile            personalProfile   `json:"profile"`
+	VerificationStatus string            `json:"verification_status"`
+	ID                 string            `json:"id" format:"uuid"`
+	Name               string            `json:"name"`
+	Email              string            `json:"email" format:"email"`
+	Phone              *string           `json:"phone"`
+	Roles              []string          `json:"roles"`
+	Location           *locationResponse `json:"location"`
+	CreatedAt          *time.Time        `json:"created_at"`
+	UpdatedAt          *time.Time        `json:"updated_at"`
 }
 
 type authSessionResponse struct {
@@ -220,18 +226,21 @@ type authSessionResponse struct {
 }
 
 type organizationResponse struct {
-	ID                 string                   `json:"id" format:"uuid"`
-	Name               string                   `json:"name"`
-	Description        string                   `json:"description"`
-	VerificationStatus string                   `json:"verification_status" enum:"pending,verified,rejected,suspended"`
-	VerifiedAt         *time.Time               `json:"verified_at"`
-	OfficialChannels   officialChannelsResponse `json:"official_channels"`
-	Location           locationResponse         `json:"location"`
-	CreatedAt          *time.Time               `json:"created_at"`
-	UpdatedAt          *time.Time               `json:"updated_at"`
-	LegalName          *string                  `json:"legal_name,omitempty" doc:"Visible to authorized representatives and administrators."`
-	RegistrationNumber **string                 `json:"registration_number,omitempty"`
-	VerificationNotes  **string                 `json:"verification_notes,omitempty"`
+	Profile            organizationPublicProfile   `json:"profile"`
+	PrivateProfile     *organizationPrivateProfile `json:"private_profile,omitempty"`
+	Slug               string                      `json:"slug"`
+	ID                 string                      `json:"id" format:"uuid"`
+	Name               string                      `json:"name"`
+	Description        string                      `json:"description"`
+	VerificationStatus string                      `json:"verification_status" enum:"pending,verified,rejected,suspended"`
+	VerifiedAt         *time.Time                  `json:"verified_at"`
+	OfficialChannels   officialChannelsResponse    `json:"official_channels"`
+	Location           locationResponse            `json:"location"`
+	CreatedAt          *time.Time                  `json:"created_at"`
+	UpdatedAt          *time.Time                  `json:"updated_at"`
+	LegalName          *string                     `json:"legal_name,omitempty" doc:"Visible to authorized representatives and administrators."`
+	RegistrationNumber **string                    `json:"registration_number,omitempty"`
+	VerificationNotes  **string                    `json:"verification_notes,omitempty"`
 }
 
 type officialChannelsResponse struct {

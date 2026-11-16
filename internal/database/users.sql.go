@@ -21,7 +21,7 @@ INSERT INTO users (
     $8, $9, $10,
     $11
 )
-RETURNING id, email, password_hash, display_name, phone, city, state_code, country_code, latitude, longitude, terms_accepted_at, privacy_accepted_at, email_verified_at, deactivated_at, deleted_at, created_at, updated_at, auth_version
+RETURNING id, email, password_hash, display_name, phone, city, state_code, country_code, latitude, longitude, terms_accepted_at, privacy_accepted_at, email_verified_at, deactivated_at, deleted_at, created_at, updated_at, auth_version, personal_profile, personal_verification_status
 `
 
 type CreateUserParams struct {
@@ -72,6 +72,8 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.AuthVersion,
+		&i.PersonalProfile,
+		&i.PersonalVerificationStatus,
 	)
 	return i, err
 }
@@ -91,7 +93,7 @@ func (q *Queries) DeactivateUser(ctx context.Context, id pgtype.UUID) (int64, er
 }
 
 const getActiveUserByEmail = `-- name: GetActiveUserByEmail :one
-SELECT id, email, password_hash, display_name, phone, city, state_code, country_code, latitude, longitude, terms_accepted_at, privacy_accepted_at, email_verified_at, deactivated_at, deleted_at, created_at, updated_at, auth_version FROM users
+SELECT id, email, password_hash, display_name, phone, city, state_code, country_code, latitude, longitude, terms_accepted_at, privacy_accepted_at, email_verified_at, deactivated_at, deleted_at, created_at, updated_at, auth_version, personal_profile, personal_verification_status FROM users
 WHERE email = $1
   AND deleted_at IS NULL
   AND deactivated_at IS NULL
@@ -119,12 +121,14 @@ func (q *Queries) GetActiveUserByEmail(ctx context.Context, email string) (User,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.AuthVersion,
+		&i.PersonalProfile,
+		&i.PersonalVerificationStatus,
 	)
 	return i, err
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, email, password_hash, display_name, phone, city, state_code, country_code, latitude, longitude, terms_accepted_at, privacy_accepted_at, email_verified_at, deactivated_at, deleted_at, created_at, updated_at, auth_version FROM users
+SELECT id, email, password_hash, display_name, phone, city, state_code, country_code, latitude, longitude, terms_accepted_at, privacy_accepted_at, email_verified_at, deactivated_at, deleted_at, created_at, updated_at, auth_version, personal_profile, personal_verification_status FROM users
 WHERE id = $1 AND deleted_at IS NULL
 `
 
@@ -150,6 +154,8 @@ func (q *Queries) GetUserByID(ctx context.Context, id pgtype.UUID) (User, error)
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.AuthVersion,
+		&i.PersonalProfile,
+		&i.PersonalVerificationStatus,
 	)
 	return i, err
 }
@@ -210,7 +216,7 @@ const markUserEmailVerified = `-- name: MarkUserEmailVerified :one
 UPDATE users
 SET email_verified_at = COALESCE(email_verified_at, now())
 WHERE id = $1 AND deleted_at IS NULL
-RETURNING id, email, password_hash, display_name, phone, city, state_code, country_code, latitude, longitude, terms_accepted_at, privacy_accepted_at, email_verified_at, deactivated_at, deleted_at, created_at, updated_at, auth_version
+RETURNING id, email, password_hash, display_name, phone, city, state_code, country_code, latitude, longitude, terms_accepted_at, privacy_accepted_at, email_verified_at, deactivated_at, deleted_at, created_at, updated_at, auth_version, personal_profile, personal_verification_status
 `
 
 func (q *Queries) MarkUserEmailVerified(ctx context.Context, id pgtype.UUID) (User, error) {
@@ -235,6 +241,8 @@ func (q *Queries) MarkUserEmailVerified(ctx context.Context, id pgtype.UUID) (Us
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.AuthVersion,
+		&i.PersonalProfile,
+		&i.PersonalVerificationStatus,
 	)
 	return i, err
 }
@@ -295,30 +303,34 @@ func (q *Queries) UpdateUserPassword(ctx context.Context, arg UpdateUserPassword
 
 const updateUserProfile = `-- name: UpdateUserProfile :one
 UPDATE users
-SET display_name = $1,
-    phone = $2,
-    city = $3,
-    state_code = $4,
-    country_code = $5,
-    latitude = $6,
-    longitude = $7
-WHERE id = $8 AND deleted_at IS NULL AND deactivated_at IS NULL
-RETURNING id, email, password_hash, display_name, phone, city, state_code, country_code, latitude, longitude, terms_accepted_at, privacy_accepted_at, email_verified_at, deactivated_at, deleted_at, created_at, updated_at, auth_version
+SET personal_profile = COALESCE($1::jsonb, personal_profile),
+ personal_verification_status = CASE WHEN $1::jsonb IS NOT NULL THEN 'unverified' ELSE personal_verification_status END,
+ display_name = $2,
+    phone = $3,
+    city = $4,
+    state_code = $5,
+    country_code = $6,
+    latitude = $7,
+    longitude = $8
+WHERE id = $9 AND deleted_at IS NULL AND deactivated_at IS NULL
+RETURNING id, email, password_hash, display_name, phone, city, state_code, country_code, latitude, longitude, terms_accepted_at, privacy_accepted_at, email_verified_at, deactivated_at, deleted_at, created_at, updated_at, auth_version, personal_profile, personal_verification_status
 `
 
 type UpdateUserProfileParams struct {
-	DisplayName string         `db:"display_name" json:"display_name"`
-	Phone       *string        `db:"phone" json:"phone"`
-	City        *string        `db:"city" json:"city"`
-	StateCode   *string        `db:"state_code" json:"state_code"`
-	CountryCode string         `db:"country_code" json:"country_code"`
-	Latitude    pgtype.Numeric `db:"latitude" json:"latitude"`
-	Longitude   pgtype.Numeric `db:"longitude" json:"longitude"`
-	ID          pgtype.UUID    `db:"id" json:"id"`
+	PersonalProfile []byte         `db:"personal_profile" json:"personal_profile"`
+	DisplayName     string         `db:"display_name" json:"display_name"`
+	Phone           *string        `db:"phone" json:"phone"`
+	City            *string        `db:"city" json:"city"`
+	StateCode       *string        `db:"state_code" json:"state_code"`
+	CountryCode     string         `db:"country_code" json:"country_code"`
+	Latitude        pgtype.Numeric `db:"latitude" json:"latitude"`
+	Longitude       pgtype.Numeric `db:"longitude" json:"longitude"`
+	ID              pgtype.UUID    `db:"id" json:"id"`
 }
 
 func (q *Queries) UpdateUserProfile(ctx context.Context, arg UpdateUserProfileParams) (User, error) {
 	row := q.db.QueryRow(ctx, updateUserProfile,
+		arg.PersonalProfile,
 		arg.DisplayName,
 		arg.Phone,
 		arg.City,
@@ -348,6 +360,8 @@ func (q *Queries) UpdateUserProfile(ctx context.Context, arg UpdateUserProfilePa
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.AuthVersion,
+		&i.PersonalProfile,
+		&i.PersonalVerificationStatus,
 	)
 	return i, err
 }
