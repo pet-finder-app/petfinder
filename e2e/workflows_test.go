@@ -123,4 +123,20 @@ func TestDonationsAndLegalVersions(t *testing.T) {
 		t.Fatal("incorrect donation total")
 	}
 	stranger.do("GET", base+"/donation-totals", nil, 403, nil)
+	var legal struct {
+		ID, Content string
+		Placeholder bool
+	}
+	client{t: t}.do("GET", "/v1/legal/terms", nil, 200, &legal)
+	if !strings.Contains(legal.Content, "Lorem ipsum") || !legal.Placeholder {
+		t.Fatal("requested placeholder legal text missing")
+	}
+	client{t: t}.do("GET", "/v1/legal/privacy/versions", nil, 200, nil)
+	var acceptances struct{ Items []any }
+	s.adopter.do("GET", "/v1/me/legal-acceptances", nil, 200, &acceptances)
+	if len(acceptances.Items) != 2 {
+		t.Fatal("registration legal versions missing")
+	}
+	s.adopter.do("POST", "/v1/me/legal-acceptances", map[string]any{"document_id": legal.ID}, 204, nil)
+	s.owner.do("POST", "/v1/legal/documents", map[string]any{"kind": "terms", "version": unique(), "title": "Terms", "content": "Lorem ipsum dolor sit amet", "reviewed_by": "Test reviewer", "effective_at": time.Now().Add(time.Hour)}, 403, nil)
 }

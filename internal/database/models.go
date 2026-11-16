@@ -243,6 +243,24 @@ type DonationHistory struct {
 	CreatedAt  pgtype.Timestamptz `db:"created_at" json:"created_at"`
 }
 
+type LegalAcceptance struct {
+	UserID     pgtype.UUID        `db:"user_id" json:"user_id"`
+	DocumentID pgtype.UUID        `db:"document_id" json:"document_id"`
+	AcceptedAt pgtype.Timestamptz `db:"accepted_at" json:"accepted_at"`
+}
+
+type LegalDocument struct {
+	ID          pgtype.UUID        `db:"id" json:"id"`
+	Kind        string             `db:"kind" json:"kind"`
+	Version     string             `db:"version" json:"version"`
+	Title       string             `db:"title" json:"title"`
+	Content     string             `db:"content" json:"content"`
+	ReviewedBy  string             `db:"reviewed_by" json:"reviewed_by"`
+	Placeholder bool               `db:"placeholder" json:"placeholder"`
+	EffectiveAt pgtype.Timestamptz `db:"effective_at" json:"effective_at"`
+	PublishedAt pgtype.Timestamptz `db:"published_at" json:"published_at"`
+}
+
 type MediaUpload struct {
 	ID          pgtype.UUID        `db:"id" json:"id"`
 	OwnerID     pgtype.UUID        `db:"owner_id" json:"owner_id"`

@@ -53,6 +53,10 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 		handleDBError(w, err)
 		return
 	}
+	if err = s.recordRegistrationLegal(r, tx, user.ID, request.TermsDocumentID, request.PrivacyDocumentID); err != nil {
+		writeServiceError(w, err)
+		return
+	}
 	for _, role := range []string{string(auth.RoleAdopter), string(auth.RoleAdvertiser)} {
 		if err := q.GrantUserRole(r.Context(), database.GrantUserRoleParams{UserID: user.ID, RoleKey: role}); err != nil {
 			handleDBError(w, err)

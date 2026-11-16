@@ -10,11 +10,13 @@ import (
 // Request types are used by both handlers and the OpenAPI schema generator.
 // Their validation tags are also enforced by decodeJSON.
 type registerRequest struct {
-	Name                  string `json:"name" minLength:"2" maxLength:"120"`
-	Email                 string `json:"email" format:"email" maxLength:"254"`
-	Password              string `json:"password" minLength:"12" maxLength:"72" writeOnly:"true" doc:"Must contain a letter and a number; maximum 72 bytes."`
-	AcceptedTerms         bool   `json:"accepted_terms" enum:"true"`
-	AcceptedPrivacyPolicy bool   `json:"accepted_privacy_policy" enum:"true"`
+	TermsDocumentID       *string `json:"terms_document_id,omitempty" format:"uuid"`
+	PrivacyDocumentID     *string `json:"privacy_document_id,omitempty" format:"uuid"`
+	Name                  string  `json:"name" minLength:"2" maxLength:"120"`
+	Email                 string  `json:"email" format:"email" maxLength:"254"`
+	Password              string  `json:"password" minLength:"12" maxLength:"72" writeOnly:"true" doc:"Must contain a letter and a number; maximum 72 bytes."`
+	AcceptedTerms         bool    `json:"accepted_terms" enum:"true"`
+	AcceptedPrivacyPolicy bool    `json:"accepted_privacy_policy" enum:"true"`
 }
 
 type loginRequest struct {
