@@ -285,6 +285,37 @@ type DonationHistory struct {
 	CreatedAt  pgtype.Timestamptz `db:"created_at" json:"created_at"`
 }
 
+type FollowupReport struct {
+	ID            pgtype.UUID        `db:"id" json:"id"`
+	FollowupID    pgtype.UUID        `db:"followup_id" json:"followup_id"`
+	SubmittedBy   pgtype.UUID        `db:"submitted_by" json:"submitted_by"`
+	Notes         string             `db:"notes" json:"notes"`
+	WelfareStatus string             `db:"welfare_status" json:"welfare_status"`
+	MediaIds      []pgtype.UUID      `db:"media_ids" json:"media_ids"`
+	SubmittedAt   pgtype.Timestamptz `db:"submitted_at" json:"submitted_at"`
+}
+
+type FollowupReview struct {
+	ID         pgtype.UUID        `db:"id" json:"id"`
+	FollowupID pgtype.UUID        `db:"followup_id" json:"followup_id"`
+	ReviewedBy pgtype.UUID        `db:"reviewed_by" json:"reviewed_by"`
+	Decision   string             `db:"decision" json:"decision"`
+	Reason     string             `db:"reason" json:"reason"`
+	ReviewedAt pgtype.Timestamptz `db:"reviewed_at" json:"reviewed_at"`
+}
+
+type FollowupTask struct {
+	ID             pgtype.UUID        `db:"id" json:"id"`
+	ApplicationID  pgtype.UUID        `db:"application_id" json:"application_id"`
+	OrganizationID pgtype.UUID        `db:"organization_id" json:"organization_id"`
+	DueAt          pgtype.Timestamptz `db:"due_at" json:"due_at"`
+	Instructions   string             `db:"instructions" json:"instructions"`
+	Status         string             `db:"status" json:"status"`
+	CreatedBy      pgtype.UUID        `db:"created_by" json:"created_by"`
+	CreatedAt      pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	ClosedAt       pgtype.Timestamptz `db:"closed_at" json:"closed_at"`
+}
+
 type LegalAcceptance struct {
 	UserID     pgtype.UUID        `db:"user_id" json:"user_id"`
 	DocumentID pgtype.UUID        `db:"document_id" json:"document_id"`

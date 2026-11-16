@@ -143,6 +143,13 @@ func (s *Server) downloadMedia(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if !reviewer {
+			err = s.pool.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM followup_reports report JOIN followup_tasks task ON task.id=report.followup_id JOIN adoption_applications app ON app.id=task.application_id WHERE $1=ANY(report.media_ids) AND (app.adopter_id=$2 OR EXISTS(SELECT 1 FROM organization_members om WHERE om.organization_id=task.organization_id AND om.user_id=$2 AND om.status='active' AND om.can_manage_applications))) OR EXISTS(SELECT 1 FROM surrenders s WHERE $1=ANY(s.documents) AND (s.requester_id=$2 OR EXISTS(SELECT 1 FROM organization_members om WHERE om.organization_id=s.organization_id AND om.user_id=$2 AND om.status='active' AND om.can_manage_applications)))`, id, actor).Scan(&reviewer)
+			if err != nil {
+				handleDBError(w, err)
+				return
+			}
+		}
+		if !reviewer {
 			writeServiceError(w, ErrNotFound)
 			return
 		}

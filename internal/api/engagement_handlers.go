@@ -66,6 +66,10 @@ func registerEngagementRoutes(s *Server, reg *routeRegistry) {
 	registerRoute[noBody, organizationAnalytics](reg, "GET", "/v1/organizations/{organizationId}/analytics", "organizationAnalytics", "Read organization totals and ninety daily aggregates", "Analytics", 200, s.protected(s.organizationAnalytics), bearerAuth(false))
 }
 func (s *Server) listNotifications(w http.ResponseWriter, r *http.Request) {
+	if err := s.materializeDueFollowups(r); err != nil {
+		handleDBError(w, err)
+		return
+	}
 	actor, _ := subjectUUID(r)
 	offset, size, page := pagination(r)
 	rows, err := s.pool.Query(r.Context(), "SELECT id::text,kind,subject_id::text,created_at,read_at FROM notifications WHERE user_id=$1 ORDER BY created_at DESC,id LIMIT $2 OFFSET $3", actor, size, offset)
@@ -91,6 +95,10 @@ func (s *Server) listNotifications(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, collectionResponse[notificationResponse]{Items: items, Page: page})
 }
 func (s *Server) notificationUnread(w http.ResponseWriter, r *http.Request) {
+	if err := s.materializeDueFollowups(r); err != nil {
+		handleDBError(w, err)
+		return
+	}
 	actor, _ := subjectUUID(r)
 	var v countResponse
 	if err := s.pool.QueryRow(r.Context(), "SELECT count(*) FROM notifications WHERE user_id=$1 AND read_at IS NULL", actor).Scan(&v.Count); err != nil {

@@ -171,6 +171,33 @@ func TestAgreementSigning(t *testing.T) {
 	s.owner.do("GET", "/v1/agreements/"+doc.ID+"/print", nil, 200, nil)
 }
 
+func TestFollowupReportsAndReturn(t *testing.T) {
+	s := newAdoptionSetup(t)
+	completeAdoption(t, s)
+	app := "/v1/applications/" + s.applicationID
+	var task struct {
+		ID, Status string
+		Reports    []any
+		Reviews    []any
+	}
+	s.owner.do("POST", app+"/follow-ups", map[string]any{"due_at": time.Now().Add(72 * time.Hour), "instructions": "Report animal welfare and attach photos"}, 201, &task)
+	path := "/v1/follow-ups/" + task.ID
+	registerUser(t).do("GET", path, nil, 403, nil)
+	report := map[string]any{"notes": "The animal is healthy and adapting to the new household", "welfare_status": "good"}
+	s.adopter.do("POST", path+"/reports", report, 200, &task)
+	if task.Status != "submitted" || len(task.Reports) != 1 {
+		t.Fatal("follow-up report missing")
+	}
+	s.adopter.do("POST", path+"/review", map[string]any{"decision": "closed", "reason": "All information reviewed"}, 403, nil)
+	s.owner.do("POST", path+"/review", map[string]any{"decision": "changes_requested", "reason": "Please include more detail"}, 200, nil)
+	s.adopter.do("POST", path+"/reports", report, 200, nil)
+	s.owner.do("POST", path+"/review", map[string]any{"decision": "closed", "reason": "All information reviewed"}, 200, &task)
+	if task.Status != "closed" || len(task.Reports) != 2 || len(task.Reviews) != 2 {
+		t.Fatal("follow-up history missing")
+	}
+	s.adopter.do("POST", path+"/reports", report, 409, nil)
+}
+
 func TestSigningCodeAttemptLimit(t *testing.T) {
 	s := newAdoptionSetup(t)
 	s.owner.do("POST", "/v1/applications/"+s.applicationID+"/decision", map[string]any{"decision": "approved", "reason": "Applicant approved after review"}, 200, nil)
