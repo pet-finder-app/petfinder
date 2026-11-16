@@ -7,6 +7,7 @@ package database
 
 import (
 	"context"
+	"encoding/json"
 	"net/netip"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -26,16 +27,16 @@ RETURNING id, actor_user_id, organization_id, action, entity_type, entity_id, ol
 `
 
 type CreateAuditLogParams struct {
-	ActorUserID    pgtype.UUID `db:"actor_user_id" json:"actor_user_id"`
-	OrganizationID pgtype.UUID `db:"organization_id" json:"organization_id"`
-	Action         string      `db:"action" json:"action"`
-	EntityType     string      `db:"entity_type" json:"entity_type"`
-	EntityID       pgtype.UUID `db:"entity_id" json:"entity_id"`
-	OldValues      []byte      `db:"old_values" json:"old_values"`
-	NewValues      []byte      `db:"new_values" json:"new_values"`
-	Metadata       []byte      `db:"metadata" json:"metadata"`
-	RequestID      pgtype.UUID `db:"request_id" json:"request_id"`
-	IpAddress      *netip.Addr `db:"ip_address" json:"ip_address"`
+	ActorUserID    pgtype.UUID     `db:"actor_user_id" json:"actor_user_id"`
+	OrganizationID pgtype.UUID     `db:"organization_id" json:"organization_id"`
+	Action         string          `db:"action" json:"action"`
+	EntityType     string          `db:"entity_type" json:"entity_type"`
+	EntityID       pgtype.UUID     `db:"entity_id" json:"entity_id"`
+	OldValues      []byte          `db:"old_values" json:"old_values"`
+	NewValues      []byte          `db:"new_values" json:"new_values"`
+	Metadata       json.RawMessage `db:"metadata" json:"metadata"`
+	RequestID      pgtype.UUID     `db:"request_id" json:"request_id"`
+	IpAddress      *netip.Addr     `db:"ip_address" json:"ip_address"`
 }
 
 func (q *Queries) CreateAuditLog(ctx context.Context, arg CreateAuditLogParams) (AuditLog, error) {

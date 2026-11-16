@@ -5,6 +5,7 @@
 package database
 
 import (
+	"encoding/json"
 	"net/netip"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -87,8 +88,8 @@ type ApplicationScreening struct {
 	ID            pgtype.UUID        `db:"id" json:"id"`
 	ApplicationID pgtype.UUID        `db:"application_id" json:"application_id"`
 	Version       int32              `db:"version" json:"version"`
-	Questions     []byte             `db:"questions" json:"questions"`
-	Answers       []byte             `db:"answers" json:"answers"`
+	Questions     json.RawMessage    `db:"questions" json:"questions"`
+	Answers       json.RawMessage    `db:"answers" json:"answers"`
 	Status        string             `db:"status" json:"status"`
 	RequestedBy   pgtype.UUID        `db:"requested_by" json:"requested_by"`
 	SubmittedAt   pgtype.Timestamptz `db:"submitted_at" json:"submitted_at"`
@@ -165,7 +166,7 @@ type AuditLog struct {
 	EntityID       pgtype.UUID        `db:"entity_id" json:"entity_id"`
 	OldValues      []byte             `db:"old_values" json:"old_values"`
 	NewValues      []byte             `db:"new_values" json:"new_values"`
-	Metadata       []byte             `db:"metadata" json:"metadata"`
+	Metadata       json.RawMessage    `db:"metadata" json:"metadata"`
 	RequestID      pgtype.UUID        `db:"request_id" json:"request_id"`
 	IpAddress      *netip.Addr        `db:"ip_address" json:"ip_address"`
 	CreatedAt      pgtype.Timestamptz `db:"created_at" json:"created_at"`

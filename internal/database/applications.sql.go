@@ -7,6 +7,7 @@ package database
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -105,10 +106,10 @@ RETURNING id, application_id, version, questions, answers, status, requested_by,
 `
 
 type CreateApplicationScreeningParams struct {
-	ApplicationID pgtype.UUID `db:"application_id" json:"application_id"`
-	Version       int32       `db:"version" json:"version"`
-	Questions     []byte      `db:"questions" json:"questions"`
-	RequestedBy   pgtype.UUID `db:"requested_by" json:"requested_by"`
+	ApplicationID pgtype.UUID     `db:"application_id" json:"application_id"`
+	Version       int32           `db:"version" json:"version"`
+	Questions     json.RawMessage `db:"questions" json:"questions"`
+	RequestedBy   pgtype.UUID     `db:"requested_by" json:"requested_by"`
 }
 
 func (q *Queries) CreateApplicationScreening(ctx context.Context, arg CreateApplicationScreeningParams) (ApplicationScreening, error) {
@@ -610,8 +611,8 @@ RETURNING id, application_id, version, questions, answers, status, requested_by,
 `
 
 type SubmitApplicationScreeningParams struct {
-	Answers []byte      `db:"answers" json:"answers"`
-	ID      pgtype.UUID `db:"id" json:"id"`
+	Answers json.RawMessage `db:"answers" json:"answers"`
+	ID      pgtype.UUID     `db:"id" json:"id"`
 }
 
 func (q *Queries) SubmitApplicationScreening(ctx context.Context, arg SubmitApplicationScreeningParams) (ApplicationScreening, error) {

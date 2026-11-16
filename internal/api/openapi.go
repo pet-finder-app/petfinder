@@ -36,6 +36,7 @@ func newRouteRegistry(mux *http.ServeMux) *routeRegistry {
 	registry := huma.NewMapRegistry("#/components/schemas/", huma.DefaultSchemaNamer)
 	// pgtype values have custom JSON serialization; document their wire values,
 	// rather than the implementation fields of the pgx wrapper structs.
+	registry.RegisterTypeAlias(reflect.TypeFor[json.RawMessage](), reflect.TypeFor[wireJSON]())
 	registry.RegisterTypeAlias(reflect.TypeFor[pgtype.UUID](), reflect.TypeFor[wireUUID]())
 	registry.RegisterTypeAlias(reflect.TypeFor[pgtype.Timestamptz](), reflect.TypeFor[wireTimestamp]())
 	registry.RegisterTypeAlias(reflect.TypeFor[pgtype.Date](), reflect.TypeFor[wireDate]())
@@ -149,7 +150,7 @@ func registerRoute[Req, Resp any](reg *routeRegistry, method, path, id, summary,
 	}
 	op.Responses[strconv.Itoa(status)] = response
 	problem := registry.Schema(reflect.TypeFor[Problem](), true, "")
-	for _, code := range []int{400, 401, 403, 404, 409, 422, 500} {
+	for _, code := range []int{400, 401, 403, 404, 409, 422, 429, 500, 503} {
 		schema := problem
 		if code == 401 || code == 403 {
 			schema = &huma.Schema{AnyOf: []*huma.Schema{problem, registry.Schema(reflect.TypeFor[authErrorResponse](), true, "")}}
@@ -234,3 +235,7 @@ type messagePaginationQuery struct {
 type inventoryQuery struct {
 	Status string `json:"status,omitempty" enum:"pending_organization,available,adoption_in_progress,adopted,unavailable,under_review"`
 }
+
+type wireJSON struct{}
+
+func (wireJSON) Schema(huma.Registry) *huma.Schema { return &huma.Schema{} }
