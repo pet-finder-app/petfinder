@@ -216,6 +216,33 @@ type ConversationRead struct {
 	ReadAt           pgtype.Timestamptz `db:"read_at" json:"read_at"`
 }
 
+type Donation struct {
+	ID              pgtype.UUID        `db:"id" json:"id"`
+	OrganizationID  pgtype.UUID        `db:"organization_id" json:"organization_id"`
+	DonorID         pgtype.UUID        `db:"donor_id" json:"donor_id"`
+	AmountCents     int64              `db:"amount_cents" json:"amount_cents"`
+	Currency        string             `db:"currency" json:"currency"`
+	TransferredAt   pgtype.Timestamptz `db:"transferred_at" json:"transferred_at"`
+	ReceiptMediaID  pgtype.UUID        `db:"receipt_media_id" json:"receipt_media_id"`
+	Anonymous       bool               `db:"anonymous" json:"anonymous"`
+	Note            string             `db:"note" json:"note"`
+	Status          string             `db:"status" json:"status"`
+	PaymentSnapshot json.RawMessage    `db:"payment_snapshot" json:"payment_snapshot"`
+	DecidedBy       pgtype.UUID        `db:"decided_by" json:"decided_by"`
+	DecidedAt       pgtype.Timestamptz `db:"decided_at" json:"decided_at"`
+	DecisionReason  *string            `db:"decision_reason" json:"decision_reason"`
+	CreatedAt       pgtype.Timestamptz `db:"created_at" json:"created_at"`
+}
+
+type DonationHistory struct {
+	ID         int64              `db:"id" json:"id"`
+	DonationID pgtype.UUID        `db:"donation_id" json:"donation_id"`
+	Status     string             `db:"status" json:"status"`
+	Reason     string             `db:"reason" json:"reason"`
+	ActorID    pgtype.UUID        `db:"actor_id" json:"actor_id"`
+	CreatedAt  pgtype.Timestamptz `db:"created_at" json:"created_at"`
+}
+
 type MediaUpload struct {
 	ID          pgtype.UUID        `db:"id" json:"id"`
 	OwnerID     pgtype.UUID        `db:"owner_id" json:"owner_id"`
@@ -298,6 +325,20 @@ type OrganizationMember struct {
 	DeactivatedAt         pgtype.Timestamptz `db:"deactivated_at" json:"deactivated_at"`
 	CreatedAt             pgtype.Timestamptz `db:"created_at" json:"created_at"`
 	UpdatedAt             pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
+}
+
+type OrganizationPaymentDetail struct {
+	OrganizationID pgtype.UUID        `db:"organization_id" json:"organization_id"`
+	Method         string             `db:"method" json:"method"`
+	Instructions   string             `db:"instructions" json:"instructions"`
+	PixKey         *string            `db:"pix_key" json:"pix_key"`
+	BankName       *string            `db:"bank_name" json:"bank_name"`
+	BankBranch     *string            `db:"bank_branch" json:"bank_branch"`
+	BankAccount    *string            `db:"bank_account" json:"bank_account"`
+	AccountHolder  string             `db:"account_holder" json:"account_holder"`
+	Published      bool               `db:"published" json:"published"`
+	UpdatedBy      pgtype.UUID        `db:"updated_by" json:"updated_by"`
+	UpdatedAt      pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
 }
 
 type PasswordResetToken struct {

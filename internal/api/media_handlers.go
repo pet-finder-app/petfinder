@@ -136,6 +136,13 @@ func (s *Server) downloadMedia(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if !reviewer {
+			err = s.pool.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM donations d JOIN organization_members om ON om.organization_id=d.organization_id WHERE d.receipt_media_id=$1 AND om.user_id=$2 AND om.status='active' AND om.can_manage_members)`, id, actor).Scan(&reviewer)
+			if err != nil {
+				handleDBError(w, err)
+				return
+			}
+		}
+		if !reviewer {
 			writeServiceError(w, ErrNotFound)
 			return
 		}

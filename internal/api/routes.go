@@ -68,5 +68,6 @@ func registerRoutes(s *Server, mux *http.ServeMux) *huma.OpenAPI {
 	registerMediaRoutes(s, reg)
 	registerCommunityRoutes(s, reg)
 	registerEngagementRoutes(s, reg)
+	registerDonationRoutes(s, reg)
 	return reg.spec
 }
