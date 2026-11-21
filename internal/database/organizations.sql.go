@@ -139,6 +139,39 @@ func (q *Queries) DeactivateOrganization(ctx context.Context, id pgtype.UUID) (i
 	return result.RowsAffected(), nil
 }
 
+const declineOrganizationMembership = `-- name: DeclineOrganizationMembership :one
+UPDATE organization_members
+SET status = 'declined', deactivated_at = now()
+WHERE id = $1 AND user_id = $2 AND status = 'invited'
+RETURNING id, organization_id, user_id, member_role, status, can_manage_members, can_publish_animals, can_manage_applications, invited_by, joined_at, deactivated_at, created_at, updated_at
+`
+
+type DeclineOrganizationMembershipParams struct {
+	ID     pgtype.UUID `db:"id" json:"id"`
+	UserID pgtype.UUID `db:"user_id" json:"user_id"`
+}
+
+func (q *Queries) DeclineOrganizationMembership(ctx context.Context, arg DeclineOrganizationMembershipParams) (OrganizationMember, error) {
+	row := q.db.QueryRow(ctx, declineOrganizationMembership, arg.ID, arg.UserID)
+	var i OrganizationMember
+	err := row.Scan(
+		&i.ID,
+		&i.OrganizationID,
+		&i.UserID,
+		&i.MemberRole,
+		&i.Status,
+		&i.CanManageMembers,
+		&i.CanPublishAnimals,
+		&i.CanManageApplications,
+		&i.InvitedBy,
+		&i.JoinedAt,
+		&i.DeactivatedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getActiveOrganizationMember = `-- name: GetActiveOrganizationMember :one
 SELECT id, organization_id, user_id, member_role, status, can_manage_members, can_publish_animals, can_manage_applications, invited_by, joined_at, deactivated_at, created_at, updated_at FROM organization_members
 WHERE organization_id = $1
@@ -153,6 +186,41 @@ type GetActiveOrganizationMemberParams struct {
 
 func (q *Queries) GetActiveOrganizationMember(ctx context.Context, arg GetActiveOrganizationMemberParams) (OrganizationMember, error) {
 	row := q.db.QueryRow(ctx, getActiveOrganizationMember, arg.OrganizationID, arg.UserID)
+	var i OrganizationMember
+	err := row.Scan(
+		&i.ID,
+		&i.OrganizationID,
+		&i.UserID,
+		&i.MemberRole,
+		&i.Status,
+		&i.CanManageMembers,
+		&i.CanPublishAnimals,
+		&i.CanManageApplications,
+		&i.InvitedBy,
+		&i.JoinedAt,
+		&i.DeactivatedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getInvitedOrganizationMember = `-- name: GetInvitedOrganizationMember :one
+SELECT om.id, om.organization_id, om.user_id, om.member_role, om.status, om.can_manage_members, om.can_publish_animals, om.can_manage_applications, om.invited_by, om.joined_at, om.deactivated_at, om.created_at, om.updated_at FROM organization_members om
+JOIN organizations o ON o.id = om.organization_id
+WHERE om.organization_id = $1
+  AND om.user_id = $2
+  AND om.status = 'invited'
+  AND o.deactivated_at IS NULL
+`
+
+type GetInvitedOrganizationMemberParams struct {
+	OrganizationID pgtype.UUID `db:"organization_id" json:"organization_id"`
+	UserID         pgtype.UUID `db:"user_id" json:"user_id"`
+}
+
+func (q *Queries) GetInvitedOrganizationMember(ctx context.Context, arg GetInvitedOrganizationMemberParams) (OrganizationMember, error) {
+	row := q.db.QueryRow(ctx, getInvitedOrganizationMember, arg.OrganizationID, arg.UserID)
 	var i OrganizationMember
 	err := row.Scan(
 		&i.ID,
@@ -289,6 +357,17 @@ INSERT INTO organization_members (
     $4, $5,
     $6, $7
 )
+ON CONFLICT (organization_id, user_id) DO UPDATE
+SET status = 'invited',
+    member_role = EXCLUDED.member_role,
+    can_manage_members = EXCLUDED.can_manage_members,
+    can_publish_animals = EXCLUDED.can_publish_animals,
+    can_manage_applications = EXCLUDED.can_manage_applications,
+    invited_by = EXCLUDED.invited_by,
+    joined_at = NULL,
+    deactivated_at = NULL,
+    updated_at = now()
+WHERE organization_members.status IN ('declined', 'removed')
 RETURNING id, organization_id, user_id, member_role, status, can_manage_members, can_publish_animals, can_manage_applications, invited_by, joined_at, deactivated_at, created_at, updated_at
 `
 
@@ -302,6 +381,7 @@ type InviteOrganizationMemberParams struct {
 	InvitedBy             pgtype.UUID `db:"invited_by" json:"invited_by"`
 }
 
+// Declined and removed people may be invited again; current members may not.
 func (q *Queries) InviteOrganizationMember(ctx context.Context, arg InviteOrganizationMemberParams) (OrganizationMember, error) {
 	row := q.db.QueryRow(ctx, inviteOrganizationMember,
 		arg.OrganizationID,

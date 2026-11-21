@@ -40,6 +40,7 @@ type Querier interface {
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	DeactivateOrganization(ctx context.Context, id pgtype.UUID) (int64, error)
 	DeactivateUser(ctx context.Context, id pgtype.UUID) (int64, error)
+	DeclineOrganizationMembership(ctx context.Context, arg DeclineOrganizationMembershipParams) (OrganizationMember, error)
 	DeleteAnimalPreference(ctx context.Context, arg DeleteAnimalPreferenceParams) (int64, error)
 	DeleteExpiredPasswordResetTokens(ctx context.Context, expiredBefore pgtype.Timestamptz) (int64, error)
 	DeleteExpiredRefreshSessions(ctx context.Context, expiredBefore pgtype.Timestamptz) (int64, error)
@@ -55,6 +56,7 @@ type Querier interface {
 	GetAnimalWithOrganization(ctx context.Context, id pgtype.UUID) (GetAnimalWithOrganizationRow, error)
 	GetAppointmentByID(ctx context.Context, id pgtype.UUID) (Appointment, error)
 	GetConversationByID(ctx context.Context, id pgtype.UUID) (Conversation, error)
+	GetInvitedOrganizationMember(ctx context.Context, arg GetInvitedOrganizationMemberParams) (OrganizationMember, error)
 	GetLatestApplicationScreening(ctx context.Context, applicationID pgtype.UUID) (ApplicationScreening, error)
 	GetOrganizationByID(ctx context.Context, id pgtype.UUID) (Organization, error)
 	GetPublicOrganizationBySlug(ctx context.Context, slug string) (GetPublicOrganizationBySlugRow, error)
@@ -62,6 +64,7 @@ type Querier interface {
 	GetUserByID(ctx context.Context, id pgtype.UUID) (User, error)
 	GrantUserRole(ctx context.Context, arg GrantUserRoleParams) error
 	IncrementAppointmentOTPFailure(ctx context.Context, id pgtype.UUID) (int64, error)
+	// Declined and removed people may be invited again; current members may not.
 	InviteOrganizationMember(ctx context.Context, arg InviteOrganizationMemberParams) (OrganizationMember, error)
 	IsVisibleMessageCursor(ctx context.Context, arg IsVisibleMessageCursorParams) (bool, error)
 	ListActorAuditLog(ctx context.Context, arg ListActorAuditLogParams) ([]AuditLog, error)

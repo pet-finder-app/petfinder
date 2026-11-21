@@ -1,9 +1,11 @@
 package api
 
 import (
+	"errors"
 	"net/http"
 	"strings"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/pet-finder-app/petfinder-api/internal/auth"
 	"github.com/pet-finder-app/petfinder-api/internal/database"
 )
@@ -278,6 +280,11 @@ func (s *Server) addOrganizationMember(w http.ResponseWriter, r *http.Request) {
 	}
 	canManage := request.Role == "coordinator"
 	invited, err := s.queries.InviteOrganizationMember(r.Context(), database.InviteOrganizationMemberParams{OrganizationID: orgID, UserID: user.ID, MemberRole: request.Role, CanManageMembers: canManage, CanPublishAnimals: request.Role != "moderator", CanManageApplications: true, InvitedBy: actor})
+	if errors.Is(err, pgx.ErrNoRows) {
+		// The person is already invited or active.
+		writeServiceError(w, ErrConflict)
+		return
+	}
 	if err != nil {
 		handleDBError(w, err)
 		return
@@ -327,4 +334,43 @@ func (s *Server) removeOrganizationMember(w http.ResponseWriter, r *http.Request
 		}
 	}
 	writeServiceError(w, ErrNotFound)
+}
+
+type membershipResponseRequest struct {
+	Decision string `json:"decision" enum:"accepted,declined"`
+}
+
+// respondToMembership lets the invited person, and only them, accept or
+// decline an invitation. Accepting grants the permissions chosen at invite time.
+func (s *Server) respondToMembership(w http.ResponseWriter, r *http.Request) {
+	orgID, ok := pathUUID(r, "organizationId")
+	if !ok {
+		invalidPath(w)
+		return
+	}
+	var request membershipResponseRequest
+	if !decodeJSON(w, r, &request) {
+		return
+	}
+	actor, _ := subjectUUID(r)
+	invitation, err := s.queries.GetInvitedOrganizationMember(r.Context(), database.GetInvitedOrganizationMemberParams{OrganizationID: orgID, UserID: actor})
+	if err != nil {
+		handleDBError(w, err)
+		return
+	}
+	var member database.OrganizationMember
+	switch request.Decision {
+	case "accepted":
+		member, err = s.queries.AcceptOrganizationMembership(r.Context(), database.AcceptOrganizationMembershipParams{ID: invitation.ID, UserID: actor})
+	case "declined":
+		member, err = s.queries.DeclineOrganizationMembership(r.Context(), database.DeclineOrganizationMembershipParams{ID: invitation.ID, UserID: actor})
+	default:
+		writeProblem(w, http.StatusUnprocessableEntity, "Validation failed", "decision must be accepted or declined", nil)
+		return
+	}
+	if err != nil {
+		handleDBError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, member)
 }

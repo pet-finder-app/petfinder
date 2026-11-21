@@ -77,11 +77,37 @@ INSERT INTO organization_members (
     sqlc.arg(can_manage_members), sqlc.arg(can_publish_animals),
     sqlc.arg(can_manage_applications), sqlc.arg(invited_by)
 )
+-- Declined and removed people may be invited again; current members may not.
+ON CONFLICT (organization_id, user_id) DO UPDATE
+SET status = 'invited',
+    member_role = EXCLUDED.member_role,
+    can_manage_members = EXCLUDED.can_manage_members,
+    can_publish_animals = EXCLUDED.can_publish_animals,
+    can_manage_applications = EXCLUDED.can_manage_applications,
+    invited_by = EXCLUDED.invited_by,
+    joined_at = NULL,
+    deactivated_at = NULL,
+    updated_at = now()
+WHERE organization_members.status IN ('declined', 'removed')
 RETURNING *;
 
 -- name: AcceptOrganizationMembership :one
 UPDATE organization_members
 SET status = 'active', joined_at = now(), deactivated_at = NULL
+WHERE id = sqlc.arg(id) AND user_id = sqlc.arg(user_id) AND status = 'invited'
+RETURNING *;
+
+-- name: GetInvitedOrganizationMember :one
+SELECT om.* FROM organization_members om
+JOIN organizations o ON o.id = om.organization_id
+WHERE om.organization_id = sqlc.arg(organization_id)
+  AND om.user_id = sqlc.arg(user_id)
+  AND om.status = 'invited'
+  AND o.deactivated_at IS NULL;
+
+-- name: DeclineOrganizationMembership :one
+UPDATE organization_members
+SET status = 'declined', deactivated_at = now()
 WHERE id = sqlc.arg(id) AND user_id = sqlc.arg(user_id) AND status = 'invited'
 RETURNING *;
 

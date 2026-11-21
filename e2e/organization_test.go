@@ -70,3 +70,34 @@ func TestOrganizationMembers(t *testing.T) {
 	owner.do(http.MethodDelete, membersPath+"/"+owner.User.ID, nil, http.StatusUnprocessableEntity, nil)
 	owner.do(http.MethodDelete, membersPath+"/"+invitee.User.ID, nil, http.StatusNoContent, nil)
 }
+
+// Invitations grant nothing until the invited person accepts them, and only
+// they can respond. Removed members can be invited again.
+func TestOrganizationInvitationLifecycle(t *testing.T) {
+	owner, invitee, outsider := registerUser(t), registerUser(t), registerUser(t)
+	org := createOrganization(t, owner, "Cidade "+unique())
+	membersPath := "/v1/organizations/" + org.ID + "/members"
+	respondPath := "/v1/me/organizations/" + org.ID + "/membership"
+
+	owner.do(http.MethodPost, membersPath, map[string]any{"email": invitee.User.Email, "role": "coordinator"}, http.StatusCreated, nil)
+	invitee.do(http.MethodGet, membersPath, nil, http.StatusForbidden, nil)
+	outsider.do(http.MethodPut, respondPath, map[string]any{"decision": "accepted"}, http.StatusNotFound, nil)
+	invitee.do(http.MethodPut, respondPath, map[string]any{"decision": "maybe"}, http.StatusUnprocessableEntity, nil)
+
+	var member struct{ Status string }
+	invitee.do(http.MethodPut, respondPath, map[string]any{"decision": "accepted"}, http.StatusOK, &member)
+	if member.Status != "active" {
+		t.Fatalf("membership status = %q, want active", member.Status)
+	}
+	invitee.do(http.MethodGet, membersPath, nil, http.StatusOK, nil)
+	invitee.do(http.MethodPut, respondPath, map[string]any{"decision": "declined"}, http.StatusNotFound, nil)
+
+	owner.do(http.MethodDelete, membersPath+"/"+invitee.User.ID, nil, http.StatusNoContent, nil)
+	invitee.do(http.MethodGet, membersPath, nil, http.StatusForbidden, nil)
+	owner.do(http.MethodPost, membersPath, map[string]any{"email": invitee.User.Email, "role": "moderator"}, http.StatusCreated, nil)
+	invitee.do(http.MethodPut, respondPath, map[string]any{"decision": "declined"}, http.StatusOK, &member)
+	if member.Status != "declined" {
+		t.Fatalf("membership status = %q, want declined", member.Status)
+	}
+	invitee.do(http.MethodGet, membersPath, nil, http.StatusForbidden, nil)
+}
