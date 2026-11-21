@@ -8,6 +8,12 @@ WHERE a.id = sqlc.arg(animal_id)
   AND a.status = 'available'
   AND a.deleted_at IS NULL
   AND EXISTS (
+      SELECT 1 FROM organizations o
+      WHERE o.id = a.responsible_organization_id
+        AND o.verification_status = 'verified'
+        AND o.deactivated_at IS NULL
+  )
+  AND EXISTS (
       SELECT 1 FROM animal_preferences p
       WHERE p.user_id = sqlc.arg(adopter_id)
         AND p.animal_id = a.id

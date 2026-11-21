@@ -103,6 +103,10 @@ type Querier interface {
 	RevokeAllUserRefreshSessions(ctx context.Context, arg RevokeAllUserRefreshSessionsParams) (int64, error)
 	RevokeAppointmentOTP(ctx context.Context, appointmentID pgtype.UUID) (int64, error)
 	RevokeRefreshSession(ctx context.Context, arg RevokeRefreshSessionParams) (int64, error)
+	// A refresh token presented again well after it was rotated indicates theft:
+	// end every session of its account and invalidate outstanding access tokens.
+	// The grace period tolerates concurrent refreshes of the same token.
+	RevokeReusedRefreshFamily(ctx context.Context, tokenHash []byte) (int64, error)
 	RevokeUserPasswordResetTokens(ctx context.Context, userID pgtype.UUID) (int64, error)
 	RevokeUserRole(ctx context.Context, arg RevokeUserRoleParams) (int64, error)
 	RotateRefreshSession(ctx context.Context, arg RotateRefreshSessionParams) (int64, error)

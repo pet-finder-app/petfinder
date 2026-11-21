@@ -101,3 +101,23 @@ func TestOrganizationInvitationLifecycle(t *testing.T) {
 	}
 	invitee.do(http.MethodGet, membersPath, nil, http.StatusForbidden, nil)
 }
+
+// A suspended organization keeps read access to its records but cannot move
+// adoptions forward or expose its animals until it is verified again.
+func TestSuspendedOrganizationCannotOperate(t *testing.T) {
+	s := newAdoptionSetup(t)
+	admin, latecomer := registerAdmin(t), registerUser(t)
+	latecomer.do(http.MethodPut, "/v1/animals/"+s.animal.ID+"/preference", map[string]any{"value": "liked"}, http.StatusOK, nil)
+	admin.do(http.MethodPost, "/v1/organizations/"+s.org.ID+"/verification", map[string]any{"decision": "suspended", "reason": "Investigação de denúncia de fraude"}, http.StatusOK, nil)
+
+	client{t: t}.do(http.MethodGet, "/v1/animals/"+s.animal.ID, nil, http.StatusNotFound, nil)
+	s.owner.do(http.MethodGet, "/v1/animals/"+s.animal.ID, nil, http.StatusOK, nil)
+	s.owner.do(http.MethodPost, "/v1/applications/"+s.applicationID+"/decision", map[string]any{"decision": "approved", "reason": "Aprovação durante a suspensão"}, http.StatusConflict, nil)
+	latecomer.do(http.MethodPost, "/v1/applications", map[string]any{"animal_id": s.animal.ID, "introduction": "Gostaria muito de adotar este animal."}, http.StatusNotFound, nil)
+	s.owner.do(http.MethodPatch, "/v1/animals/"+s.animal.ID+"/status", map[string]any{"status": "under_review", "reason": "Pausa durante a suspensão"}, http.StatusOK, nil)
+	s.owner.do(http.MethodPatch, "/v1/animals/"+s.animal.ID+"/status", map[string]any{"status": "available", "reason": "Republicação indevida"}, http.StatusConflict, nil)
+
+	verifyOrganization(t, admin, s.org.ID)
+	s.owner.do(http.MethodPatch, "/v1/animals/"+s.animal.ID+"/status", map[string]any{"status": "available", "reason": "Republicação após verificação"}, http.StatusOK, nil)
+	s.owner.do(http.MethodPost, "/v1/applications/"+s.applicationID+"/decision", map[string]any{"decision": "approved", "reason": "Aprovação após verificação"}, http.StatusOK, nil)
+}

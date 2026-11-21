@@ -51,3 +51,25 @@ func TestVerificationCannotApproveChangedIdentity(t *testing.T) {
 	admin.do("POST", "/v1/verifications/"+v.ID+"/decision", map[string]any{"decision": "approved", "reason": "Attempt to approve stale evidence"}, 409, nil)
 	admin.do("POST", "/v1/verifications/"+v.ID+"/decision", map[string]any{"decision": "rejected", "reason": "Please submit current identity evidence"}, 200, nil)
 }
+
+// Submitting new evidence must not lift a suspension; only an administrator can.
+func TestSuspendedOrganizationStaysSuspendedUntilReviewed(t *testing.T) {
+	owner, admin := registerUser(t), registerAdmin(t)
+	org := createOrganization(t, owner, "City "+unique())
+	verifyOrganization(t, admin, org.ID)
+	admin.do("POST", "/v1/organizations/"+org.ID+"/verification", map[string]any{"decision": "suspended", "reason": "Pending fraud investigation"}, 200, nil)
+	var v struct{ ID string }
+	owner.do("POST", "/v1/organizations/"+org.ID+"/verification-submissions", map[string]any{"documents": []string{"https://example.com/registration.pdf"}}, 201, &v)
+	var current struct {
+		VerificationStatus string `json:"verification_status"`
+	}
+	owner.do("GET", "/v1/organizations/"+org.ID, nil, 200, &current)
+	if current.VerificationStatus != "suspended" {
+		t.Fatalf("status after resubmission = %q, want suspended", current.VerificationStatus)
+	}
+	admin.do("POST", "/v1/verifications/"+v.ID+"/decision", map[string]any{"decision": "approved", "reason": "Investigation closed"}, 200, nil)
+	owner.do("GET", "/v1/organizations/"+org.ID, nil, 200, &current)
+	if current.VerificationStatus != "verified" {
+		t.Fatalf("status after approval = %q, want verified", current.VerificationStatus)
+	}
+}

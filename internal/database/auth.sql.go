@@ -216,6 +216,32 @@ func (q *Queries) RevokeRefreshSession(ctx context.Context, arg RevokeRefreshSes
 	return result.RowsAffected(), nil
 }
 
+const revokeReusedRefreshFamily = `-- name: RevokeReusedRefreshFamily :execrows
+WITH reused AS (
+    SELECT rs.user_id FROM refresh_sessions rs
+    WHERE rs.token_hash = $1
+      AND rs.revoke_reason = 'rotated'
+      AND rs.revoked_at < now() - interval '30 seconds'
+), revoked AS (
+    UPDATE refresh_sessions
+    SET revoked_at = now(), revoke_reason = 'reuse_detected'
+    WHERE user_id IN (SELECT user_id FROM reused) AND revoked_at IS NULL
+)
+UPDATE users SET auth_version = auth_version + 1
+WHERE id IN (SELECT user_id FROM reused)
+`
+
+// A refresh token presented again well after it was rotated indicates theft:
+// end every session of its account and invalidate outstanding access tokens.
+// The grace period tolerates concurrent refreshes of the same token.
+func (q *Queries) RevokeReusedRefreshFamily(ctx context.Context, tokenHash []byte) (int64, error) {
+	result, err := q.db.Exec(ctx, revokeReusedRefreshFamily, tokenHash)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const revokeUserPasswordResetTokens = `-- name: RevokeUserPasswordResetTokens :execrows
 UPDATE password_reset_tokens
 SET revoked_at = now()

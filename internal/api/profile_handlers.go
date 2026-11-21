@@ -152,7 +152,8 @@ func (s *Server) submitVerification(w http.ResponseWriter, r *http.Request) {
 	if user.Valid {
 		_, err = tx.Exec(r.Context(), "UPDATE users SET personal_verification_status='pending' WHERE id=$1", user)
 	} else {
-		_, err = tx.Exec(r.Context(), "UPDATE organizations SET verification_status='pending' WHERE id=$1 AND deactivated_at IS NULL", org)
+		// A suspension stands until an administrator reviews the new evidence.
+		_, err = tx.Exec(r.Context(), "UPDATE organizations SET verification_status='pending' WHERE id=$1 AND deactivated_at IS NULL AND verification_status<>'suspended'", org)
 	}
 	if err != nil {
 		handleDBError(w, err)

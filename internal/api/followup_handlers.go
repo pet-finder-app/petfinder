@@ -175,8 +175,10 @@ func (s *Server) submitFollowupReport(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	// The organization reviews reports; letting it also author them would let
+	// it close welfare follow-ups without the adopter.
 	actor, _ := subjectUUID(r)
-	if actor != app.AdopterID && !s.applicationAccess(r, app, true) {
+	if actor != app.AdopterID {
 		writeServiceError(w, ErrForbidden)
 		return
 	}

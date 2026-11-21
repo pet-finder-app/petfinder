@@ -172,7 +172,7 @@ func (s *Server) getAnimal(w http.ResponseWriter, r *http.Request) {
 		handleDBError(w, err)
 		return
 	}
-	if animal.Status != string(domain.AnimalAvailable) {
+	if animal.Status != string(domain.AnimalAvailable) || !s.publicOrganization(r, animal.ResponsibleOrganizationID) {
 		actor, valid := subjectUUID(r)
 		allowed := valid && actor == animal.SubmittedBy
 		if valid && animal.ResponsibleOrganizationID.Valid {
@@ -208,7 +208,7 @@ func (s *Server) animalWriteAllowed(r *http.Request, animal database.Animal, pub
 	if hasRole(r, auth.RoleAdmin) {
 		return true
 	}
-	if !publish && actor == animal.SubmittedBy {
+	if !publish && submitterControls(animal, actor) {
 		return true
 	}
 	if animal.ResponsibleOrganizationID.Valid {
@@ -216,6 +216,14 @@ func (s *Server) animalWriteAllowed(r *http.Request, animal database.Animal, pub
 		return active && (!publish || member.CanPublishAnimals)
 	}
 	return false
+}
+
+// submitterControls reports whether actor still controls their own private
+// submission. Once an organization accepts it, or for animals created by an
+// organization, only its active members may change it, so former members and
+// people who handed an animal over lose write access.
+func submitterControls(animal database.Animal, actor pgtype.UUID) bool {
+	return actor == animal.SubmittedBy && animal.Source == "private_submission" && animal.OrganizationReviewStatus != "accepted"
 }
 
 func (s *Server) updateAnimal(w http.ResponseWriter, r *http.Request) {
@@ -328,6 +336,10 @@ func (s *Server) updateAnimalStatus(w http.ResponseWriter, r *http.Request) {
 	reason := strings.TrimSpace(request.Reason)
 	if len(reason) < 5 {
 		writeProblem(w, http.StatusUnprocessableEntity, "Validation failed", "reason must contain at least 5 characters", nil)
+		return
+	}
+	if request.Status == domain.AnimalAvailable && !s.publicOrganization(r, current.ResponsibleOrganizationID) {
+		writeProblem(w, http.StatusConflict, "Organization not verified", "the responsible organization must be verified and active", nil)
 		return
 	}
 	var updated database.Animal

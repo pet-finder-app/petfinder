@@ -2,10 +2,13 @@ package api
 
 import (
 	"crypto/sha256"
+	"errors"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/pet-finder-app/petfinder-api/internal/auth"
@@ -133,6 +136,15 @@ func (s *Server) refresh(w http.ResponseWriter, r *http.Request) {
 	q := database.New(tx)
 	session, err := q.GetActiveRefreshSessionByTokenHash(r.Context(), hash[:])
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			if reused, reuseErr := q.RevokeReusedRefreshFamily(r.Context(), hash[:]); reuseErr == nil && reused > 0 {
+				if commitErr := tx.Commit(r.Context()); commitErr != nil {
+					writeServiceError(w, commitErr)
+					return
+				}
+				slog.Warn("refresh token reuse detected; account sessions revoked")
+			}
+		}
 		writeProblem(w, http.StatusUnauthorized, "Invalid session", "refresh token is invalid or expired", nil)
 		return
 	}
@@ -175,7 +187,7 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 	}
 	hash := sha256.Sum256([]byte(request.RefreshToken))
 	session, err := s.queries.GetActiveRefreshSessionByTokenHash(r.Context(), hash[:])
-	if err == nil {
+	if actor, _ := subjectUUID(r); err == nil && session.UserID == actor {
 		reason := "logout"
 		_, err = s.queries.RevokeRefreshSession(r.Context(), database.RevokeRefreshSessionParams{RevokeReason: &reason, ID: session.ID})
 	}

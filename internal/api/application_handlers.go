@@ -273,6 +273,10 @@ func (s *Server) decideApplication(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, http.StatusConflict, "Invalid state transition", err.Error(), nil)
 		return
 	}
+	if to == string(domain.ApplicationAccepted) && !s.publicOrganization(r, application.OrganizationID) {
+		writeProblem(w, http.StatusConflict, "Organization not verified", "the responsible organization must be verified and active", nil)
+		return
+	}
 	tx, err := s.pool.Begin(r.Context())
 	if err != nil {
 		writeServiceError(w, err)

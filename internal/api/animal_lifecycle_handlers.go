@@ -151,7 +151,7 @@ func (s *Server) retainAnimal(w http.ResponseWriter, r *http.Request, remove boo
 		handleDBError(w, err)
 		return
 	}
-	allowed := actor == animal.SubmittedBy || s.animalWriteAllowed(r, animal, true)
+	allowed := submitterControls(animal, actor) || s.animalWriteAllowed(r, animal, true)
 	if !allowed {
 		writeServiceError(w, ErrForbidden)
 		return

@@ -3,6 +3,7 @@
 package e2e
 
 import (
+	"context"
 	"net/http"
 	"slices"
 	"testing"
@@ -57,4 +58,24 @@ func TestRegisterValidatesInput(t *testing.T) {
 		"name": "E2E", "email": "e2e-" + unique() + "@example.com", "password": "short",
 		"accepted_terms": true, "accepted_privacy_policy": false,
 	}, http.StatusUnprocessableEntity, nil)
+}
+
+// Presenting a refresh token long after it was rotated means someone else holds
+// the chain: every session ends and outstanding access tokens stop working.
+// A prompt repeat, as concurrent refreshes produce, is only rejected.
+func TestRefreshTokenReuseRevokesAccount(t *testing.T) {
+	u := registerUser(t)
+	anonymous := client{t: t}
+	var rotated session
+	anonymous.do(http.MethodPost, "/v1/auth/refresh", map[string]any{"refresh_token": u.RefreshToken}, http.StatusOK, &rotated)
+	anonymous.do(http.MethodPost, "/v1/auth/refresh", map[string]any{"refresh_token": u.RefreshToken}, http.StatusUnauthorized, nil)
+	client{t: t, token: rotated.AccessToken}.do(http.MethodGet, "/v1/me", nil, http.StatusOK, nil)
+
+	if _, err := pool.Exec(context.Background(), `UPDATE refresh_sessions SET revoked_at = now() - interval '1 minute' WHERE user_id = $1 AND revoke_reason = 'rotated'`, u.User.ID); err != nil {
+		t.Fatal(err)
+	}
+	anonymous.do(http.MethodPost, "/v1/auth/refresh", map[string]any{"refresh_token": u.RefreshToken}, http.StatusUnauthorized, nil)
+	client{t: t, token: rotated.AccessToken}.do(http.MethodGet, "/v1/me", nil, http.StatusUnauthorized, nil)
+	anonymous.do(http.MethodPost, "/v1/auth/refresh", map[string]any{"refresh_token": rotated.RefreshToken}, http.StatusUnauthorized, nil)
+	login(t, u.User.Email)
 }
