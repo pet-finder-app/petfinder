@@ -36,6 +36,35 @@ func uploadPNG(t *testing.T, u user, purpose string) uploaded {
 	return media
 }
 
+// Profile images are public once referenced by their owner's profile or a
+// verified organization's public profile; nobody can publish someone else's
+// private file by referencing it, and co-managers share organization files.
+func TestProfileMediaVisibility(t *testing.T) {
+	owner, comanager, outsider, admin := registerUser(t), registerUser(t), registerUser(t), registerAdmin(t)
+	anonymous := client{t: t}
+	org := createOrganization(t, owner, "Cidade "+unique())
+	owner.do(http.MethodPost, "/v1/organizations/"+org.ID+"/members", map[string]any{"email": comanager.User.Email, "role": "coordinator"}, http.StatusCreated, nil)
+	comanager.do(http.MethodPut, "/v1/me/organizations/"+org.ID+"/membership", map[string]any{"decision": "accepted"}, http.StatusOK, nil)
+
+	avatar := uploadPNG(t, outsider, "avatar")
+	anonymous.do(http.MethodGet, "/v1/media/"+avatar.ID, nil, http.StatusNotFound, nil)
+	outsider.do(http.MethodPatch, "/v1/me", map[string]any{"profile": map[string]any{"avatar_url": avatar.URL}}, http.StatusOK, nil)
+	anonymous.do(http.MethodGet, "/v1/media/"+avatar.ID, nil, http.StatusOK, nil)
+
+	logo := uploadPNG(t, owner, "avatar")
+	private := uploadPNG(t, outsider, "post")
+	owner.do(http.MethodPatch, "/v1/organizations/"+org.ID, map[string]any{"profile": map[string]any{"logo_url": logo.URL, "gallery": []string{private.URL}}}, http.StatusOK, nil)
+	anonymous.do(http.MethodGet, "/v1/media/"+logo.ID, nil, http.StatusNotFound, nil) // not verified yet
+	verifyOrganization(t, admin, org.ID)
+	anonymous.do(http.MethodGet, "/v1/media/"+logo.ID, nil, http.StatusOK, nil)
+	anonymous.do(http.MethodGet, "/v1/media/"+private.ID, nil, http.StatusNotFound, nil) // not uploaded by a member
+
+	document := uploadPNG(t, owner, "document")
+	owner.do(http.MethodPatch, "/v1/organizations/"+org.ID, map[string]any{"private_profile": map[string]any{"documents": []string{document.URL}}}, http.StatusOK, nil)
+	comanager.do(http.MethodGet, "/v1/media/"+document.ID, nil, http.StatusOK, nil)
+	outsider.do(http.MethodGet, "/v1/media/"+document.ID, nil, http.StatusNotFound, nil)
+}
+
 // Saving an unchanged profile keeps verification; only real changes reset it.
 func TestUnchangedProfilesKeepVerification(t *testing.T) {
 	owner, admin := registerUser(t), registerAdmin(t)

@@ -122,6 +122,8 @@ func (s *Server) downloadMedia(w http.ResponseWriter, r *http.Request) {
 	var own, public bool
 	err := s.pool.QueryRow(r.Context(), `SELECT m.content,m.content_type,m.purpose,m.filename,COALESCE(m.owner_id=$2,false),
  EXISTS(SELECT 1 FROM posts p JOIN organizations o ON o.id=p.organization_id WHERE m.id=ANY(p.media_ids) AND p.deleted_at IS NULL AND o.verification_status='verified' AND o.deactivated_at IS NULL)
+ OR (m.purpose IN ('avatar','post') AND EXISTS(SELECT 1 FROM organizations o JOIN organization_members om ON om.organization_id=o.id AND om.user_id=m.owner_id WHERE o.verification_status='verified' AND o.deactivated_at IS NULL AND (o.public_profile->>'logo_url' LIKE '%/v1/media/'||m.id::text OR EXISTS(SELECT 1 FROM jsonb_array_elements_text(COALESCE(o.public_profile->'gallery','[]'::jsonb)) g WHERE g LIKE '%/v1/media/'||m.id::text))))
+ OR (m.purpose='avatar' AND EXISTS(SELECT 1 FROM users u WHERE u.id=m.owner_id AND u.deactivated_at IS NULL AND u.personal_profile->>'avatar_url' LIKE '%/v1/media/'||m.id::text))
  OR (m.purpose='animal' AND EXISTS(SELECT 1 FROM animal_images i JOIN animals a ON a.id=i.animal_id JOIN organizations o ON o.id=a.responsible_organization_id WHERE i.storage_key LIKE '%/v1/media/'||m.id::text AND i.removed_at IS NULL AND i.moderation_status='approved' AND a.deleted_at IS NULL AND a.status='available' AND o.verification_status='verified'))
  FROM media_uploads m WHERE m.id=$1 AND m.uploaded_at IS NOT NULL`, id, actor).Scan(&body, &mime, &purpose, &filename, &own, &public)
 	if err != nil {
@@ -134,6 +136,14 @@ func (s *Server) downloadMedia(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			handleDBError(w, err)
 			return
+		}
+		if !reviewer {
+			// Managers share their organization's private documents and media.
+			err = s.pool.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM organizations o JOIN organization_members om ON om.organization_id=o.id AND om.user_id=$1 AND om.status='active' AND om.can_manage_members JOIN media_uploads owned ON owned.id=$2::uuid JOIN organization_members uploader ON uploader.organization_id=o.id AND uploader.user_id=owned.owner_id WHERE o.private_profile::text LIKE '%/v1/media/'||$2::text||'%' OR o.public_profile::text LIKE '%/v1/media/'||$2::text||'%')`, actor, uuidString(id)).Scan(&reviewer)
+			if err != nil {
+				handleDBError(w, err)
+				return
+			}
 		}
 		if !reviewer {
 			err = s.pool.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM donations d JOIN organization_members om ON om.organization_id=d.organization_id WHERE d.receipt_media_id=$1 AND om.user_id=$2 AND om.status='active' AND om.can_manage_members)`, id, actor).Scan(&reviewer)
@@ -155,7 +165,14 @@ func (s *Server) downloadMedia(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	w.Header().Set("Content-Type", mime)
-	w.Header().Set("Cache-Control", "private, no-store")
+	// Uploaded bytes can never be replaced, so they never need revalidation.
+	// Only publicly visible media may enter shared caches; the one-day lifetime
+	// bounds how long a revoked or unpublished file stays cached.
+	if public {
+		w.Header().Set("Cache-Control", "public, max-age=86400, immutable")
+	} else {
+		w.Header().Set("Cache-Control", "private, max-age=86400, immutable")
+	}
 	if purpose == "document" || mime == "application/pdf" {
 		w.Header().Set("Content-Disposition", "attachment")
 	}

@@ -126,6 +126,10 @@ func TestBinaryMediaAndLifecycle(t *testing.T) {
 	if res.StatusCode != 200 || !bytes.Equal(body, data) {
 		t.Fatal("stored media bytes do not match")
 	}
+	// Bytes are immutable, so they are cached, but a private file stays private.
+	if got := res.Header.Get("Cache-Control"); got != "private, max-age=86400, immutable" {
+		t.Fatalf("private media Cache-Control = %q", got)
+	}
 	var a animal
 	animalBody := animalRequest("", "City "+unique())
 	delete(animalBody, "organization_id")
