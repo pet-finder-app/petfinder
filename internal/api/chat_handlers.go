@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -21,6 +22,9 @@ const (
 	chatSubprotocol = "petfinder.chat.v1"
 	// bearerSubprotocol prefixes an access token offered as a subprotocol.
 	bearerSubprotocol = "bearer."
+	// ticketSubprotocol prefixes a conversation-scoped ticket from the
+	// ws-ticket route, for browsers that keep access tokens in HttpOnly cookies.
+	ticketSubprotocol = "ticket."
 	chatSendCommand   = "message.send"
 
 	chatReadLimit    = 64 << 10
@@ -46,11 +50,22 @@ var (
 
 // chatAuth accepts the access token in the Authorization header or, because
 // browsers cannot set headers on WebSocket requests, as a "bearer.<token>"
-// subprotocol. Query strings are avoided because proxies commonly log them.
+// subprotocol, or a conversation-scoped "ticket.<ticket>" subprotocol issued by
+// the ws-ticket route. Query strings are avoided because proxies commonly log them.
 func (s *Server) chatAuth(handler http.HandlerFunc) http.Handler {
 	protected := s.protected(handler)
+	ticketed := s.accountActive(handler)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") == "" {
+			if ticket, ok := subprotocolValue(r, ticketSubprotocol); ok {
+				claims, err := s.tokens.ParseTicket(ticket, r.PathValue("conversationId"))
+				if err != nil {
+					writeProblem(w, http.StatusUnauthorized, "Unauthorized", "invalid or expired chat ticket", nil)
+					return
+				}
+				ticketed.ServeHTTP(w, r.WithContext(auth.WithClaims(r.Context(), claims)))
+				return
+			}
 			if token, ok := subprotocolToken(r); ok {
 				r = r.Clone(r.Context())
 				r.Header.Set("Authorization", "Bearer "+token)
@@ -61,14 +76,65 @@ func (s *Server) chatAuth(handler http.HandlerFunc) http.Handler {
 }
 
 func subprotocolToken(r *http.Request) (string, bool) {
+	return subprotocolValue(r, bearerSubprotocol)
+}
+
+func subprotocolValue(r *http.Request, prefix string) (string, bool) {
 	for _, value := range r.Header.Values("Sec-WebSocket-Protocol") {
 		for _, protocol := range strings.Split(value, ",") {
-			if token, ok := strings.CutPrefix(strings.TrimSpace(protocol), bearerSubprotocol); ok && token != "" {
+			if token, ok := strings.CutPrefix(strings.TrimSpace(protocol), prefix); ok && token != "" {
 				return token, true
 			}
 		}
 	}
 	return "", false
+}
+
+type chatTicketResponse struct {
+	Ticket      string    `json:"ticket" doc:"Offer as a ticket.<ticket> subprotocol next to petfinder.chat.v1."`
+	URL         string    `json:"url" doc:"WebSocket URL of the conversation."`
+	Subprotocol string    `json:"subprotocol"`
+	ExpiresAt   time.Time `json:"expires_at" doc:"Redeem before this instant; the connection then lasts until the access token expires."`
+}
+
+// issueChatTicket lets cookie-based browser clients open the conversation socket
+// without exposing their access token to JavaScript.
+func (s *Server) issueChatTicket(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathUUID(r, "conversationId")
+	if !ok {
+		invalidPath(w)
+		return
+	}
+	conversation, err := s.queries.GetConversationByID(r.Context(), id)
+	if err != nil {
+		handleDBError(w, err)
+		return
+	}
+	if allowed, _ := s.conversationAllowed(r, conversation); !allowed {
+		writeServiceError(w, ErrForbidden)
+		return
+	}
+	claims, _ := auth.ClaimsFromContext(r.Context())
+	ticket, expires, err := s.tokens.IssueTicket(claims, uuidString(id))
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, http.StatusCreated, chatTicketResponse{Ticket: ticket, URL: chatSocketURL(r, uuidString(id)), Subprotocol: chatSubprotocol, ExpiresAt: expires})
+}
+
+func chatSocketURL(r *http.Request, id string) string {
+	base := strings.TrimRight(os.Getenv("PUBLIC_API_URL"), "/")
+	if base == "" {
+		scheme := "http"
+		if r.TLS != nil {
+			scheme = "https"
+		}
+		base = scheme + "://" + r.Host
+	}
+	base = strings.Replace(strings.Replace(base, "https://", "wss://", 1), "http://", "ws://", 1)
+	return base + "/v1/conversations/" + id + "/ws"
 }
 
 func (s *Server) chatSocket(w http.ResponseWriter, r *http.Request) {

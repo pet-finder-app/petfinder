@@ -181,3 +181,106 @@ func newTokenID() (string, error) {
 	}
 	return base64.RawURLEncoding.EncodeToString(id[:]), nil
 }
+
+// TicketTTL bounds how long a WebSocket ticket can be redeemed. The connection
+// it opens lives until the issuing access token would have expired.
+const TicketTTL = time.Minute
+
+// ticketAudienceSuffix gives tickets their own audience so a ticket is never
+// accepted as an access token and an access token is never accepted as a ticket.
+const ticketAudienceSuffix = ".ws"
+
+var ErrTicketScope = errors.New("ticket does not grant this resource")
+
+// ticketClaims carry an access identity scoped to one conversation socket.
+type ticketClaims struct {
+	Roles            []Role `json:"roles"`
+	Version          int    `json:"version"`
+	Conversation     string `json:"cid"`
+	SessionExpiresAt int64  `json:"sxp"`
+	jwt.RegisteredClaims
+}
+
+func (c ticketClaims) Validate() error {
+	if c.Subject == "" {
+		return ErrSubjectRequired
+	}
+	if c.Conversation == "" || c.SessionExpiresAt == 0 {
+		return ErrTicketScope
+	}
+	return validateRoles(c.Roles)
+}
+
+// IssueTicket creates a short-lived ticket that lets a browser, which cannot
+// send an Authorization header or read HttpOnly cookies, open the WebSocket of
+// one conversation without exposing its access token to JavaScript.
+func (m *TokenManager) IssueTicket(access Claims, conversation string) (string, time.Time, error) {
+	if access.Subject == "" {
+		return "", time.Time{}, ErrSubjectRequired
+	}
+	if conversation == "" || access.ExpiresAt == nil {
+		return "", time.Time{}, ErrTicketScope
+	}
+	now := m.now().UTC()
+	expires := now.Add(TicketTTL)
+	if access.ExpiresAt.Before(expires) {
+		expires = access.ExpiresAt.Time
+	}
+	id, err := newTokenID()
+	if err != nil {
+		return "", time.Time{}, fmt.Errorf("create ticket ID: %w", err)
+	}
+	claims := ticketClaims{
+		Roles: uniqueRoles(access.Roles), Version: access.Version, Conversation: conversation,
+		SessionExpiresAt: access.ExpiresAt.Unix(),
+		RegisteredClaims: jwt.RegisteredClaims{
+			Issuer:    m.issuer,
+			Subject:   access.Subject,
+			Audience:  jwt.ClaimStrings{m.audience + ticketAudienceSuffix},
+			ExpiresAt: jwt.NewNumericDate(expires),
+			NotBefore: jwt.NewNumericDate(now),
+			IssuedAt:  jwt.NewNumericDate(now),
+			ID:        id,
+		},
+	}
+	signed, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(m.secret)
+	return signed, expires, err
+}
+
+// ParseTicket verifies a ticket for conversation and returns the identity it
+// carries. The returned expiry is that of the access token that issued it.
+func (m *TokenManager) ParseTicket(encoded, conversation string) (Claims, error) {
+	if encoded == "" || conversation == "" {
+		return Claims{}, ErrInvalidToken
+	}
+	claims := ticketClaims{}
+	parser := jwt.NewParser(
+		jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}),
+		jwt.WithIssuer(m.issuer),
+		jwt.WithAudience(m.audience+ticketAudienceSuffix),
+		jwt.WithExpirationRequired(),
+		jwt.WithIssuedAt(),
+		jwt.WithLeeway(m.leeway),
+		jwt.WithTimeFunc(m.now),
+	)
+	token, err := parser.ParseWithClaims(encoded, &claims, func(token *jwt.Token) (any, error) {
+		if token.Method != jwt.SigningMethodHS256 {
+			return nil, ErrInvalidToken
+		}
+		return m.secret, nil
+	})
+	if err != nil || !token.Valid || claims.Conversation != conversation {
+		return Claims{}, ErrInvalidToken
+	}
+	session := time.Unix(claims.SessionExpiresAt, 0)
+	if !m.now().Before(session) {
+		return Claims{}, ErrInvalidToken
+	}
+	return Claims{
+		Roles: append([]Role(nil), claims.Roles...), Version: claims.Version,
+		RegisteredClaims: jwt.RegisteredClaims{
+			Issuer: claims.Issuer, Subject: claims.Subject, Audience: jwt.ClaimStrings{m.audience},
+			ExpiresAt: jwt.NewNumericDate(session), IssuedAt: claims.IssuedAt, ID: claims.ID,
+		},
+	}, nil
+}

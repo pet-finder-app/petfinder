@@ -100,7 +100,8 @@ func adminOnly(reg *routeRegistry, op *huma.Operation) {
 func chatProtocol(reg *routeRegistry, op *huma.Operation) {
 	registry := reg.spec.Components.Schemas
 	op.Description = "Upgrades to a WebSocket using the `" + chatSubprotocol + "` subprotocol. Browsers, which cannot set the " +
-		"Authorization header, may instead offer the access token as an additional `" + bearerSubprotocol + "<token>` subprotocol. " +
+		"Authorization header, may instead offer the access token as an additional `" + bearerSubprotocol + "<token>` subprotocol, or a " +
+		"conversation-scoped ticket from `POST /v1/conversations/{conversationId}/ws-ticket` as a `" + ticketSubprotocol + "<ticket>` subprotocol. " +
 		"Clients send `ChatCommand` text frames and receive `ChatEvent` frames: `message.created` for messages from other " +
 		"connections, `message.ack` answering the sender, and `error`. The server closes the connection with code 4001 when the " +
 		"access token expires; refresh it and reconnect, then list messages to fill any gap."
