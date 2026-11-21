@@ -454,7 +454,7 @@ func (s *Server) sendSurrenderCode(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, 429, "Try again later", "wait one minute before requesting another handover code", nil)
 		return
 	}
-	if err = s.email.Send(r.Context(), u.Email, "PetFinder surrender handover", "Handover code for "+v.ID+": "+code); err != nil {
+	if err = s.email.Send(r.Context(), u.Email, "Petfinder: código de entrega do animal", "Seu código para confirmar a entrega do animal à ONG é: "+code+"\n\nInforme-o somente no momento da entrega.\nSe você não pediu este código, ignore este e-mail."); err != nil {
 		writeProblem(w, 503, "Email unavailable", "unable to deliver handover code", nil)
 		return
 	}
@@ -543,7 +543,7 @@ func (s *Server) confirmSurrenderHandover(w http.ResponseWriter, r *http.Request
 		now := time.Now()
 		delivered = &now
 	}
-	if _, err = tx.Exec(r.Context(), "INSERT INTO surrender_history(surrender_id,actor_id,action,notes) VALUES($1,$2,$3,'Handover confirmed')", v.ID, actor, req.Type); err != nil {
+	if _, err = tx.Exec(r.Context(), "INSERT INTO surrender_history(surrender_id,actor_id,action,notes) VALUES($1,$2,$3,'Entrega confirmada')", v.ID, actor, req.Type); err != nil {
 		handleDBError(w, err)
 		return
 	}

@@ -305,15 +305,16 @@ type FollowupReview struct {
 }
 
 type FollowupTask struct {
-	ID             pgtype.UUID        `db:"id" json:"id"`
-	ApplicationID  pgtype.UUID        `db:"application_id" json:"application_id"`
-	OrganizationID pgtype.UUID        `db:"organization_id" json:"organization_id"`
-	DueAt          pgtype.Timestamptz `db:"due_at" json:"due_at"`
-	Instructions   string             `db:"instructions" json:"instructions"`
-	Status         string             `db:"status" json:"status"`
-	CreatedBy      pgtype.UUID        `db:"created_by" json:"created_by"`
-	CreatedAt      pgtype.Timestamptz `db:"created_at" json:"created_at"`
-	ClosedAt       pgtype.Timestamptz `db:"closed_at" json:"closed_at"`
+	ID                 pgtype.UUID        `db:"id" json:"id"`
+	ApplicationID      pgtype.UUID        `db:"application_id" json:"application_id"`
+	OrganizationID     pgtype.UUID        `db:"organization_id" json:"organization_id"`
+	DueAt              pgtype.Timestamptz `db:"due_at" json:"due_at"`
+	Instructions       string             `db:"instructions" json:"instructions"`
+	Status             string             `db:"status" json:"status"`
+	CreatedBy          pgtype.UUID        `db:"created_by" json:"created_by"`
+	CreatedAt          pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	ClosedAt           pgtype.Timestamptz `db:"closed_at" json:"closed_at"`
+	CancellationReason *string            `db:"cancellation_reason" json:"cancellation_reason"`
 }
 
 type LegalAcceptance struct {

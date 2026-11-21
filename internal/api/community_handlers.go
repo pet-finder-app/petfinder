@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -200,7 +201,24 @@ func (s *Server) updatePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req postRequest
-	if !decodeJSON(w, r, &req) || !s.checkMedia(w, r, req.MediaIDs, "post") {
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	// Photos already on the post may stay whoever uploaded them; any other
+	// editor of the organization may keep or reorder them. New ones must be the
+	// editor's own uploads.
+	var existing []string
+	if err := s.pool.QueryRow(r.Context(), `SELECT COALESCE(array_agg(m::text),'{}') FROM posts, unnest(media_ids) m WHERE id=$1`, id).Scan(&existing); err != nil {
+		handleDBError(w, err)
+		return
+	}
+	added := make([]string, 0, len(req.MediaIDs))
+	for _, mediaID := range req.MediaIDs {
+		if !slices.Contains(existing, strings.ToLower(mediaID)) {
+			added = append(added, mediaID)
+		}
+	}
+	if !s.checkMedia(w, r, added, "post") {
 		return
 	}
 	if strings.TrimSpace(req.Body) == "" {

@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -11,6 +12,13 @@ import (
 type followupScheduleRequest struct {
 	DueAt        time.Time `json:"due_at"`
 	Instructions string    `json:"instructions" minLength:"5" maxLength:"5000"`
+}
+type followupUpdateRequest struct {
+	DueAt        *time.Time `json:"due_at,omitempty"`
+	Instructions *string    `json:"instructions,omitempty" minLength:"5" maxLength:"5000"`
+}
+type followupCancellationRequest struct {
+	Reason string `json:"reason" minLength:"5" maxLength:"2000"`
 }
 type followupReportRequest struct {
 	Notes         string   `json:"notes" minLength:"10" maxLength:"10000"`
@@ -36,26 +44,30 @@ type followupReview struct {
 	ReviewedAt time.Time `json:"reviewed_at"`
 }
 type followupResponse struct {
-	ID            string           `json:"id"`
-	ApplicationID string           `json:"application_id"`
-	DueAt         time.Time        `json:"due_at"`
-	Instructions  string           `json:"instructions"`
-	Status        string           `json:"status"`
-	ClosedAt      *time.Time       `json:"closed_at"`
-	Reports       []followupReport `json:"reports"`
-	Reviews       []followupReview `json:"reviews"`
+	ID            string     `json:"id"`
+	ApplicationID string     `json:"application_id"`
+	DueAt         time.Time  `json:"due_at"`
+	Instructions  string     `json:"instructions"`
+	Status        string     `json:"status" enum:"scheduled,submitted,changes_requested,closed,cancelled"`
+	ClosedAt      *time.Time `json:"closed_at"`
+	// CancellationReason is set only when the organization cancelled the task.
+	CancellationReason *string          `json:"cancellation_reason"`
+	Reports            []followupReport `json:"reports"`
+	Reviews            []followupReview `json:"reviews"`
 }
 type followupList struct {
 	Items []followupResponse `json:"items"`
 }
 
-const followupProjection = `jsonb_build_object('id',f.id,'application_id',f.application_id,'due_at',f.due_at,'instructions',f.instructions,'status',f.status,'closed_at',f.closed_at,'reports',COALESCE((SELECT jsonb_agg(to_jsonb(r) ORDER BY r.submitted_at,r.id) FROM followup_reports r WHERE r.followup_id=f.id),'[]'::jsonb),'reviews',COALESCE((SELECT jsonb_agg(to_jsonb(v) ORDER BY v.reviewed_at,v.id) FROM followup_reviews v WHERE v.followup_id=f.id),'[]'::jsonb))`
+const followupProjection = `jsonb_build_object('id',f.id,'application_id',f.application_id,'due_at',f.due_at,'instructions',f.instructions,'status',f.status,'closed_at',f.closed_at,'cancellation_reason',f.cancellation_reason,'reports',COALESCE((SELECT jsonb_agg(to_jsonb(r) ORDER BY r.submitted_at,r.id) FROM followup_reports r WHERE r.followup_id=f.id),'[]'::jsonb),'reviews',COALESCE((SELECT jsonb_agg(to_jsonb(v) ORDER BY v.reviewed_at,v.id) FROM followup_reviews v WHERE v.followup_id=f.id),'[]'::jsonb))`
 
 func registerFollowupRoutes(s *Server, reg *routeRegistry) {
 	registerRoute[followupScheduleRequest, followupResponse](reg, "POST", "/v1/applications/{applicationId}/follow-ups", "scheduleFollowup", "Schedule post-adoption reporting", "Follow-ups", 201, s.protected(s.scheduleFollowup), bearerAuth(false))
 	registerRoute[noBody, followupList](reg, "GET", "/v1/applications/{applicationId}/follow-ups", "listFollowups", "Read post-adoption reports and reviews", "Follow-ups", 200, s.protected(s.listFollowups), bearerAuth(false))
 	registerRoute[noBody, followupResponse](reg, "GET", "/v1/follow-ups/{followupId}", "getFollowup", "Read a follow-up report task", "Follow-ups", 200, s.protected(s.getFollowup), bearerAuth(false))
 	registerRoute[followupReportRequest, followupResponse](reg, "POST", "/v1/follow-ups/{followupId}/reports", "submitFollowupReport", "Submit an immutable follow-up report", "Follow-ups", 200, s.protected(s.submitFollowupReport), bearerAuth(false))
+	registerRoute[followupUpdateRequest, followupResponse](reg, "PATCH", "/v1/follow-ups/{followupId}", "updateFollowup", "Reschedule or edit a follow-up before a report arrives", "Follow-ups", 200, s.protected(s.updateFollowup), bearerAuth(false))
+	registerRoute[followupCancellationRequest, followupResponse](reg, "POST", "/v1/follow-ups/{followupId}/cancellation", "cancelFollowup", "Cancel a follow-up that is not closed", "Follow-ups", 200, s.protected(s.cancelFollowup), bearerAuth(false))
 	registerRoute[followupReviewRequest, followupResponse](reg, "POST", "/v1/follow-ups/{followupId}/review", "reviewFollowupReport", "Request changes or close a submitted follow-up", "Follow-ups", 200, s.protected(s.reviewFollowup), bearerAuth(false))
 }
 func (s *Server) scheduleFollowup(w http.ResponseWriter, r *http.Request) {
@@ -254,4 +266,80 @@ func (s *Server) materializeDueFollowups(r *http.Request) error {
 	actor, _ := subjectUUID(r)
 	_, err := s.pool.Exec(r.Context(), `INSERT INTO notifications(user_id,kind,subject_id) SELECT $1,'followup_due',f.id FROM followup_tasks f JOIN adoption_applications a ON a.id=f.application_id WHERE a.adopter_id=$1 AND f.due_at<=now() AND f.status IN ('scheduled','changes_requested') ON CONFLICT(user_id,subject_id) WHERE kind='followup_due' DO NOTHING`, actor)
 	return err
+}
+
+// updateFollowup changes the due date or instructions while the adopter has
+// not submitted a report for review yet.
+func (s *Server) updateFollowup(w http.ResponseWriter, r *http.Request) {
+	id, app, ok := s.followupScope(w, r)
+	if !ok {
+		return
+	}
+	if !s.applicationAccess(r, app, true) {
+		writeServiceError(w, ErrForbidden)
+		return
+	}
+	var req followupUpdateRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	if req.DueAt == nil && req.Instructions == nil {
+		writeProblem(w, http.StatusUnprocessableEntity, "Validation failed", "change due_at or instructions", nil)
+		return
+	}
+	if req.DueAt != nil && !req.DueAt.After(time.Now()) {
+		writeProblem(w, http.StatusUnprocessableEntity, "Validation failed", "due_at must be in the future", nil)
+		return
+	}
+	tag, err := s.pool.Exec(r.Context(), `UPDATE followup_tasks SET due_at=COALESCE($2,due_at),instructions=COALESCE($3,instructions) WHERE id=$1 AND status IN ('scheduled','changes_requested')`, id, req.DueAt, req.Instructions)
+	if err != nil {
+		handleDBError(w, err)
+		return
+	}
+	if tag.RowsAffected() != 1 {
+		writeServiceError(w, ErrConflict)
+		return
+	}
+	s.writeFollowup(w, r, id)
+}
+
+// cancelFollowup ends a follow-up the organization no longer needs. Reports
+// already submitted stay in its history.
+func (s *Server) cancelFollowup(w http.ResponseWriter, r *http.Request) {
+	id, app, ok := s.followupScope(w, r)
+	if !ok {
+		return
+	}
+	if !s.applicationAccess(r, app, true) {
+		writeServiceError(w, ErrForbidden)
+		return
+	}
+	var req followupCancellationRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	reason := strings.TrimSpace(req.Reason)
+	if len(reason) < 5 {
+		writeProblem(w, http.StatusUnprocessableEntity, "Validation failed", "reason must contain at least 5 characters", nil)
+		return
+	}
+	tag, err := s.pool.Exec(r.Context(), `UPDATE followup_tasks SET status='cancelled',cancellation_reason=$2,closed_at=now() WHERE id=$1 AND status IN ('scheduled','submitted','changes_requested')`, id, reason)
+	if err != nil {
+		handleDBError(w, err)
+		return
+	}
+	if tag.RowsAffected() != 1 {
+		writeServiceError(w, ErrConflict)
+		return
+	}
+	s.writeFollowup(w, r, id)
+}
+
+func (s *Server) writeFollowup(w http.ResponseWriter, r *http.Request, id pgtype.UUID) {
+	var v followupResponse
+	if err := s.pool.QueryRow(r.Context(), "SELECT "+followupProjection+" FROM followup_tasks f WHERE id=$1", id).Scan(&v); err != nil {
+		handleDBError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, v)
 }

@@ -94,7 +94,7 @@ func (s *Server) forgotPassword(w http.ResponseWriter, r *http.Request) {
 	query := link.Query()
 	query.Set("token", token)
 	link.RawQuery = query.Encode()
-	if err = s.email.Send(r.Context(), u.Email, "PetFinder password recovery", "Open this link within 30 minutes to reset your password: "+link.String()); err != nil {
+	if err = s.email.Send(r.Context(), u.Email, "Petfinder: redefinição de senha", "Recebemos um pedido para redefinir a senha da sua conta.\n\nAbra este link em até 30 minutos para escolher uma nova senha:\n"+link.String()+"\n\nSe você não fez este pedido, ignore este e-mail; sua senha continua a mesma."); err != nil {
 		writeProblem(w, 503, "Email unavailable", "unable to deliver recovery email", nil)
 		return
 	}

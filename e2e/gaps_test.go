@@ -8,6 +8,52 @@ import (
 	"time"
 )
 
+// Follow-ups can be rescheduled and cancelled by the organization only, and a
+// cancelled follow-up accepts no reports.
+func TestFollowupRescheduleAndCancel(t *testing.T) {
+	s := newAdoptionSetup(t)
+	completeAdoption(t, s)
+	var task struct {
+		ID, Status         string
+		DueAt              time.Time `json:"due_at"`
+		CancellationReason *string   `json:"cancellation_reason"`
+	}
+	s.owner.do(http.MethodPost, "/v1/applications/"+s.applicationID+"/follow-ups", map[string]any{"due_at": time.Now().Add(72 * time.Hour), "instructions": "Envie fotos do animal"}, http.StatusCreated, &task)
+	path := "/v1/follow-ups/" + task.ID
+	later := time.Now().Add(240 * time.Hour).UTC().Truncate(time.Second)
+	s.adopter.do(http.MethodPatch, path, map[string]any{"due_at": later}, http.StatusForbidden, nil)
+	s.owner.do(http.MethodPatch, path, map[string]any{"due_at": time.Now().Add(-time.Hour)}, http.StatusUnprocessableEntity, nil)
+	s.owner.do(http.MethodPatch, path, map[string]any{"due_at": later, "instructions": "Envie fotos e conte como está a adaptação"}, http.StatusOK, &task)
+	if !task.DueAt.Equal(later) {
+		t.Fatalf("due_at = %v, want %v", task.DueAt, later)
+	}
+	s.adopter.do(http.MethodPost, path+"/cancellation", map[string]any{"reason": "Não quero mais"}, http.StatusForbidden, nil)
+	s.owner.do(http.MethodPost, path+"/cancellation", map[string]any{"reason": "Acompanhamento feito por visita presencial"}, http.StatusOK, &task)
+	if task.Status != "cancelled" || task.CancellationReason == nil {
+		t.Fatalf("follow-up after cancellation = %+v", task)
+	}
+	s.adopter.do(http.MethodPost, path+"/reports", map[string]any{"notes": "O animal está ótimo e adaptado à casa", "welfare_status": "good"}, http.StatusConflict, nil)
+	s.owner.do(http.MethodPatch, path, map[string]any{"instructions": "Tarde demais para mudar"}, http.StatusConflict, nil)
+	s.owner.do(http.MethodPost, path+"/cancellation", map[string]any{"reason": "Cancelar de novo"}, http.StatusConflict, nil)
+}
+
+// Completed adoptions may still record an agreement, and whoever handles
+// applications can publish the templates they use.
+func TestAgreementAfterCompletionAndTemplatePermissions(t *testing.T) {
+	s := newAdoptionSetup(t)
+	representative := registerUser(t)
+	s.owner.do(http.MethodPost, "/v1/organizations/"+s.org.ID+"/members", map[string]any{"email": representative.User.Email, "role": "representative"}, http.StatusCreated, nil)
+	representative.do(http.MethodPut, "/v1/me/organizations/"+s.org.ID+"/membership", map[string]any{"decision": "accepted"}, http.StatusOK, nil)
+	var template struct{ ID string }
+	representative.do(http.MethodPost, "/v1/organizations/"+s.org.ID+"/agreement-templates", map[string]any{"kind": "adoption", "body": "{{user_name}} adota {{animal_name}} junto à {{organization_name}} em {{date}}."}, http.StatusCreated, &template)
+	completeAdoption(t, s)
+	var agreement struct{ ID string }
+	s.owner.do(http.MethodPost, "/v1/applications/"+s.applicationID+"/agreement", map[string]any{"template_id": template.ID, "representative_id": s.owner.User.ID}, http.StatusCreated, &agreement)
+	if agreement.ID == "" {
+		t.Fatal("agreement not created after completion")
+	}
+}
+
 // Responses carry the display names clients show, and notifications carry
 // enough context to link to their case.
 func TestDisplayNamesAndNotificationContext(t *testing.T) {

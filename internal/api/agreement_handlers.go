@@ -85,7 +85,8 @@ func (s *Server) createAgreementTemplate(w http.ResponseWriter, r *http.Request)
 		invalidPath(w)
 		return
 	}
-	if !s.financeAllowed(r, org) {
+	// Templates are written and used by the people who handle adoptions.
+	if !s.analyticsAllowed(r, org) {
 		writeServiceError(w, ErrForbidden)
 		return
 	}
@@ -175,7 +176,8 @@ func (s *Server) createAgreement(w http.ResponseWriter, r *http.Request) {
 			writeServiceError(w, ErrForbidden)
 			return
 		}
-		if app.Status != "approved" {
+		// Completed adoptions may still record their agreement afterwards.
+		if app.Status != "approved" && app.Status != "completed" {
 			writeServiceError(w, ErrConflict)
 			return
 		}
@@ -356,7 +358,7 @@ func (s *Server) sendAgreementCode(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, 429, "Try again later", "wait one minute before requesting another signing code", nil)
 		return
 	}
-	if err = s.email.Send(r.Context(), user.Email, "PetFinder agreement signing code", "Code for agreement "+v.ID+": "+code+"\nContent SHA256: "+v.SHA256); err != nil {
+	if err = s.email.Send(r.Context(), user.Email, "Petfinder: código para assinar o termo", "Seu código para assinar o termo é: "+code+"\n\nEle vale por 10 minutos e só pode ser usado uma vez.\nConfira se o resumo SHA-256 do termo exibido no Petfinder é:\n"+v.SHA256+"\n\nSe você não pediu este código, ignore este e-mail."); err != nil {
 		writeProblem(w, 503, "Email unavailable", "unable to deliver signing code", nil)
 		return
 	}
@@ -447,9 +449,19 @@ func (s *Server) printAgreement(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'")
 	w.Header().Set("Cache-Control", "private, no-store")
-	_, _ = fmt.Fprintf(w, "<!doctype html><html><head><meta charset=\"utf-8\"><title>Agreement</title></head><body><h1>Agreement %s</h1><pre>%s</pre><p>SHA256: %s</p>", html.EscapeString(v.ID), html.EscapeString(v.Body), v.SHA256)
+	_, _ = fmt.Fprintf(w, "<!doctype html><html lang=\"pt-BR\"><head><meta charset=\"utf-8\"><title>Termo %s</title></head><body><h1>Termo</h1><pre style=\"white-space:pre-wrap\">%s</pre><p>Resumo SHA-256: %s</p><h2>Assinaturas</h2>", html.EscapeString(v.ID), html.EscapeString(v.Body), v.SHA256)
+	location := time.FixedZone("BRT", -3*60*60)
 	for _, sig := range v.Signatures {
-		_, _ = fmt.Fprintf(w, "<p>Signed by %s at %s</p>", html.EscapeString(sig.SignerID), sig.SignedAt.UTC().Format(time.RFC3339))
+		name := sig.SignerID
+		if id, ok := pathUUIDValue(sig.SignerID); ok {
+			if signer, err := s.queries.GetUserByID(r.Context(), id); err == nil {
+				name = signer.DisplayName
+			}
+		}
+		_, _ = fmt.Fprintf(w, "<p>Assinado por %s em %s (horário de Brasília)</p>", html.EscapeString(name), sig.SignedAt.In(location).Format("02/01/2006 15:04"))
+	}
+	if len(v.Signatures) == 0 {
+		_, _ = fmt.Fprint(w, "<p>Ainda sem assinaturas.</p>")
 	}
 	_, _ = fmt.Fprint(w, "</body></html>")
 }

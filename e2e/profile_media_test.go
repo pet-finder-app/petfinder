@@ -99,3 +99,19 @@ func TestUnchangedProfilesKeepVerification(t *testing.T) {
 		t.Fatalf("unchanged personal profile reset status to %q", me.VerificationStatus)
 	}
 }
+
+// Any publisher of the organization can edit a post and keep photos a
+// colleague uploaded, but cannot attach another person's uploads.
+func TestCoEditorsKeepPostPhotos(t *testing.T) {
+	owner, coordinator, outsider, admin := registerUser(t), registerUser(t), registerUser(t), registerAdmin(t)
+	org := createOrganization(t, owner, "Cidade "+unique())
+	verifyOrganization(t, admin, org.ID)
+	owner.do(http.MethodPost, "/v1/organizations/"+org.ID+"/members", map[string]any{"email": coordinator.User.Email, "role": "coordinator"}, http.StatusCreated, nil)
+	coordinator.do(http.MethodPut, "/v1/me/organizations/"+org.ID+"/membership", map[string]any{"decision": "accepted"}, http.StatusOK, nil)
+	photo := uploadPNG(t, owner, "post")
+	var post struct{ ID string }
+	owner.do(http.MethodPost, "/v1/organizations/"+org.ID+"/posts", map[string]any{"body": "Feira de adoção no sábado!", "media_ids": []string{photo.ID}}, http.StatusCreated, &post)
+	coordinator.do(http.MethodPut, "/v1/posts/"+post.ID, map[string]any{"body": "Feira de adoção no sábado, das 9h às 13h!", "media_ids": []string{photo.ID}}, http.StatusOK, nil)
+	foreign := uploadPNG(t, outsider, "post")
+	coordinator.do(http.MethodPut, "/v1/posts/"+post.ID, map[string]any{"body": "Com foto de outra pessoa", "media_ids": []string{photo.ID, foreign.ID}}, http.StatusForbidden, nil)
+}

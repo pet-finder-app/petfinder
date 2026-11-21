@@ -36,9 +36,14 @@ func TestRecoveryAndRevocation(t *testing.T) {
 	if len(fields) == 0 {
 		t.Fatal("recovery email missing")
 	}
-	link, err := url.Parse(fields[len(fields)-1])
-	if err != nil {
-		t.Fatal(err)
+	var link *url.URL
+	for _, field := range fields {
+		if parsed, err := url.Parse(field); err == nil && parsed.Query().Get("token") != "" {
+			link = parsed
+		}
+	}
+	if link == nil {
+		t.Fatal("recovery link missing")
 	}
 	token := link.Query().Get("token")
 	if token == "" {
@@ -50,7 +55,7 @@ func TestRecoveryAndRevocation(t *testing.T) {
 	// Simulate an old-credential login finishing after reset-session revocation.
 	stale := "stale-session-" + unique() + unique()
 	staleHash := sha256.Sum256([]byte(stale))
-	if _, err = pool.Exec(context.Background(), "INSERT INTO refresh_sessions(user_id,token_hash,expires_at,auth_version) VALUES($1,$2,now()+interval '1 hour',0)", u.User.ID, staleHash[:]); err != nil {
+	if _, err := pool.Exec(context.Background(), "INSERT INTO refresh_sessions(user_id,token_hash,expires_at,auth_version) VALUES($1,$2,now()+interval '1 hour',0)", u.User.ID, staleHash[:]); err != nil {
 		t.Fatal(err)
 	}
 	anonymous.do("POST", "/v1/auth/refresh", map[string]any{"refresh_token": stale}, 401, nil)
