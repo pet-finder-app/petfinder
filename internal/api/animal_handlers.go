@@ -16,8 +16,8 @@ import (
 func validateAnimal(request *animalRequest) fieldErrors {
 	errs := fieldErrors{}
 	request.Name = required(errs, "name", request.Name, 100)
-	if request.Species != "dog" && request.Species != "cat" && request.Species != "other" {
-		errs.add("species", "must be dog, cat, or other")
+	if !validSpecies(request.Species) {
+		errs.add("species", "invalid species")
 	}
 	if request.Size != "small" && request.Size != "medium" && request.Size != "large" && request.Size != "extra_large" {
 		errs.add("size", "must be small, medium, large, or extra_large")
@@ -56,12 +56,18 @@ func birthDate(value *string, errs fieldErrors) pgtype.Date {
 }
 
 func animalParams(request animalRequest) database.CreatePrivateAnimalParams {
-	return database.CreatePrivateAnimalParams{
-		Name: request.Name, Species: request.Species, Breed: request.Breed, Sex: request.Sex, Size: request.Size,
+	result := database.CreatePrivateAnimalParams{
+		Attributes: optionalJSON(request.Attributes), Name: request.Name, Species: request.Species, Breed: request.Breed, Sex: request.Sex, Size: request.Size,
 		Description: request.Description, HealthNotes: request.HealthNotes, BehaviorNotes: request.BehaviorNotes,
 		City: request.Location.City, StateCode: request.Location.State, CountryCode: request.Location.CountryCode,
 		Latitude: numeric(request.Location.Latitude), Longitude: numeric(request.Location.Longitude),
 	}
+	if request.Attributes != nil {
+		result.Vaccinated = request.Attributes.Vaccinated
+		result.Neutered = request.Attributes.Neutered
+		result.SpecialNeeds = request.Attributes.SpecialNeeds
+	}
+	return result
 }
 
 func (s *Server) listAnimals(w http.ResponseWriter, r *http.Request) {
@@ -88,7 +94,12 @@ func (s *Server) listAnimals(w http.ResponseWriter, r *http.Request) {
 		handleDBError(w, err)
 		return
 	}
-	page.Total = len(items)
+	total, err := s.queries.CountAvailableAnimals(r.Context(), database.CountAvailableAnimalsParams{Species: ptr("species"), Size: ptr("size"), StateCode: ptr("state"), City: ptr("city"), ViewerID: viewer})
+	if err != nil {
+		handleDBError(w, err)
+		return
+	}
+	page.Total = int(total)
 	writeJSON(w, http.StatusOK, collectionResponse[database.ListAvailableAnimalsRow]{Items: items, Page: page})
 }
 
@@ -132,9 +143,9 @@ func (s *Server) createAnimal(w http.ResponseWriter, r *http.Request) {
 		member, allowed := s.activeMember(r, orgID, actor)
 		if allowed && member.CanPublishAnimals {
 			animal, err = s.queries.CreateOrganizationAnimal(r.Context(), database.CreateOrganizationAnimalParams{
-				SubmittedBy: actor, ResponsibleOrganizationID: orgID, Name: base.Name, Species: base.Species, Breed: base.Breed,
+				Attributes: base.Attributes, SubmittedBy: actor, ResponsibleOrganizationID: orgID, Name: base.Name, Species: base.Species, Breed: base.Breed,
 				Sex: base.Sex, Size: base.Size, BirthDate: base.BirthDate, Description: base.Description,
-				HealthNotes: base.HealthNotes, BehaviorNotes: base.BehaviorNotes, City: base.City, StateCode: base.StateCode,
+				Vaccinated: base.Vaccinated, Neutered: base.Neutered, SpecialNeeds: base.SpecialNeeds, HealthNotes: base.HealthNotes, BehaviorNotes: base.BehaviorNotes, City: base.City, StateCode: base.StateCode,
 				CountryCode: base.CountryCode, Latitude: base.Latitude, Longitude: base.Longitude,
 			})
 		} else {
@@ -166,7 +177,7 @@ func (s *Server) getAnimal(w http.ResponseWriter, r *http.Request) {
 		handleDBError(w, err)
 		return
 	}
-	if animal.Status != string(domain.AnimalAvailable) {
+	if animal.Status != string(domain.AnimalAvailable) || !s.publicOrganization(r, animal.ResponsibleOrganizationID) {
 		actor, valid := subjectUUID(r)
 		allowed := valid && actor == animal.SubmittedBy
 		if valid && animal.ResponsibleOrganizationID.Valid {
@@ -202,7 +213,7 @@ func (s *Server) animalWriteAllowed(r *http.Request, animal database.Animal, pub
 	if hasRole(r, auth.RoleAdmin) {
 		return true
 	}
-	if !publish && actor == animal.SubmittedBy {
+	if !publish && submitterControls(animal, actor) {
 		return true
 	}
 	if animal.ResponsibleOrganizationID.Valid {
@@ -210,6 +221,14 @@ func (s *Server) animalWriteAllowed(r *http.Request, animal database.Animal, pub
 		return active && (!publish || member.CanPublishAnimals)
 	}
 	return false
+}
+
+// submitterControls reports whether actor still controls their own private
+// submission. Once an organization accepts it, or for animals created by an
+// organization, only its active members may change it, so former members and
+// people who handed an animal over lose write access.
+func submitterControls(animal database.Animal, actor pgtype.UUID) bool {
+	return actor == animal.SubmittedBy && animal.Source == "private_submission" && animal.OrganizationReviewStatus != "accepted"
 }
 
 func (s *Server) updateAnimal(w http.ResponseWriter, r *http.Request) {
@@ -232,7 +251,7 @@ func (s *Server) updateAnimal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	request := animalRequest{
-		Name: patch.Name, Species: patch.Species, Breed: patch.Breed, Size: patch.Size, Sex: patch.Sex,
+		Attributes: patch.Attributes, Name: patch.Name, Species: patch.Species, Breed: patch.Breed, Size: patch.Size, Sex: patch.Sex,
 		ApproximateBirthDate: patch.ApproximateBirthDate, Description: patch.Description,
 		HealthNotes: patch.HealthNotes, BehaviorNotes: patch.BehaviorNotes, Location: patch.Location,
 	}
@@ -272,8 +291,13 @@ func (s *Server) updateAnimal(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, http.StatusUnprocessableEntity, "Validation failed", "review the invalid fields", errs)
 		return
 	}
+	if request.Attributes != nil {
+		current.Vaccinated = request.Attributes.Vaccinated
+		current.Neutered = request.Attributes.Neutered
+		current.SpecialNeeds = request.Attributes.SpecialNeeds
+	}
 	updated, err := s.queries.UpdateAnimalDetails(r.Context(), database.UpdateAnimalDetailsParams{
-		Name: request.Name, Species: request.Species, Breed: request.Breed, Sex: request.Sex, Size: request.Size, BirthDate: date,
+		Attributes: optionalJSON(request.Attributes), Name: request.Name, Species: request.Species, Breed: request.Breed, Sex: request.Sex, Size: request.Size, BirthDate: date,
 		Description: request.Description, HealthNotes: request.HealthNotes, BehaviorNotes: request.BehaviorNotes,
 		Vaccinated: current.Vaccinated, Neutered: current.Neutered, SpecialNeeds: current.SpecialNeeds,
 		City: request.Location.City, StateCode: request.Location.State, CountryCode: request.Location.CountryCode,
@@ -319,6 +343,10 @@ func (s *Server) updateAnimalStatus(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, http.StatusUnprocessableEntity, "Validation failed", "reason must contain at least 5 characters", nil)
 		return
 	}
+	if request.Status == domain.AnimalAvailable && !s.publicOrganization(r, current.ResponsibleOrganizationID) {
+		writeProblem(w, http.StatusConflict, "Organization not verified", "the responsible organization must be verified and active", nil)
+		return
+	}
 	var updated database.Animal
 	if current.Status == string(domain.AnimalPending) && request.Status == domain.AnimalAvailable && current.Source == "private_submission" {
 		updated, err = s.queries.ReviewAnimalSubmission(r.Context(), database.ReviewAnimalSubmissionParams{ReviewStatus: "accepted", ReviewNotes: &reason, ReviewedBy: actor, ID: id, OrganizationID: current.ResponsibleOrganizationID})
@@ -353,6 +381,13 @@ func (s *Server) addAnimalImage(w http.ResponseWriter, r *http.Request) {
 	}
 	errs := fieldErrors{}
 	request.URL = validImageURL(errs, "url", request.URL)
+	if index := strings.LastIndex(request.URL, "/v1/media/"); index >= 0 {
+		raw := request.URL[index+len("/v1/media/"):]
+		if !s.checkMedia(w, r, []string{raw}, "animal") {
+			return
+		}
+	}
+
 	request.AltText = optional(errs, "alt_text", request.AltText, 300)
 	if request.Position < 0 {
 		errs.add("position", "must not be negative")
@@ -417,7 +452,12 @@ func (s *Server) listPreferences(w http.ResponseWriter, r *http.Request) {
 		handleDBError(w, err)
 		return
 	}
-	page.Total = len(items)
+	total, err := s.queries.CountPreferredAnimals(r.Context(), database.CountPreferredAnimalsParams{UserID: actor, Preference: preference})
+	if err != nil {
+		handleDBError(w, err)
+		return
+	}
+	page.Total = int(total)
 	writeJSON(w, http.StatusOK, collectionResponse[database.ListPreferredAnimalsRow]{Items: items, Page: page})
 }
 

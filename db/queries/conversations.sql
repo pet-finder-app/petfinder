@@ -97,3 +97,32 @@ RETURNING *;
 UPDATE messages
 SET deleted_at = now()
 WHERE id = sqlc.arg(id) AND sender_id = sqlc.arg(sender_id) AND deleted_at IS NULL;
+
+-- name: ListApplicationConversations :many
+SELECT * FROM conversations
+WHERE application_id = sqlc.arg(application_id)
+ORDER BY created_at, id;
+
+-- name: CloseWithdrawnApplicationConversations :exec
+UPDATE conversations SET status = 'closed', closed_by = sqlc.arg(actor_id), closed_at = now()
+WHERE application_id = sqlc.arg(application_id) AND status = 'open';
+
+-- name: ListMessagesBeforeCursor :many
+SELECT m.* FROM messages m
+WHERE m.conversation_id = sqlc.arg(conversation_id)
+  AND m.deleted_at IS NULL
+  AND (sqlc.arg(include_moderated)::boolean OR m.moderation_status IN ('visible', 'flagged'))
+  AND (sqlc.narg(before_id)::uuid IS NULL OR (m.created_at, m.id) < (
+    SELECT c.created_at, c.id FROM messages c
+    WHERE c.id = sqlc.narg(before_id) AND c.conversation_id = sqlc.arg(conversation_id)
+  ))
+ORDER BY m.created_at DESC, m.id DESC
+LIMIT sqlc.arg(page_size)::int;
+
+-- name: IsVisibleMessageCursor :one
+SELECT EXISTS (
+ SELECT 1 FROM messages WHERE id = sqlc.arg(id)
+ AND conversation_id = sqlc.arg(conversation_id)
+ AND deleted_at IS NULL
+ AND (sqlc.arg(include_moderated)::boolean OR moderation_status IN ('visible', 'flagged'))
+)::boolean AS valid;

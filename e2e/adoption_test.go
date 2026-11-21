@@ -174,3 +174,30 @@ func TestApplicationIsPrivateToItsParties(t *testing.T) {
 	}
 	s.adopter.do(http.MethodGet, "/v1/applications?organization_id="+s.org.ID, nil, http.StatusForbidden, nil)
 }
+
+// Only the responsible organization may change an animal once it controls it:
+// neither a removed member who created it nor a person whose submission the
+// organization accepted keeps write access.
+func TestAnimalWriteAccessFollowsOrganization(t *testing.T) {
+	owner, coordinator, advertiser := registerUser(t), registerUser(t), registerUser(t)
+	city := "Cidade " + unique()
+	org := createOrganization(t, owner, city)
+	verifyOrganization(t, registerAdmin(t), org.ID)
+	owner.do(http.MethodPost, "/v1/organizations/"+org.ID+"/members", map[string]any{"email": coordinator.User.Email, "role": "coordinator"}, http.StatusCreated, nil)
+	coordinator.do(http.MethodPut, "/v1/me/organizations/"+org.ID+"/membership", map[string]any{"decision": "accepted"}, http.StatusOK, nil)
+
+	var created animal
+	coordinator.do(http.MethodPost, "/v1/animals", animalRequest(org.ID, city), http.StatusCreated, &created)
+	edit := map[string]any{"description": "Descrição alterada por quem não pode mais."}
+	coordinator.do(http.MethodPatch, "/v1/animals/"+created.ID, edit, http.StatusOK, nil)
+	owner.do(http.MethodDelete, "/v1/organizations/"+org.ID+"/members/"+coordinator.User.ID, nil, http.StatusNoContent, nil)
+	coordinator.do(http.MethodPatch, "/v1/animals/"+created.ID, edit, http.StatusForbidden, nil)
+	coordinator.do(http.MethodPost, "/v1/animals/"+created.ID+"/archive", map[string]any{"reason": "Arquivamento indevido"}, http.StatusForbidden, nil)
+
+	var submitted animal
+	advertiser.do(http.MethodPost, "/v1/animals", animalRequest(org.ID, city), http.StatusCreated, &submitted)
+	advertiser.do(http.MethodPatch, "/v1/animals/"+submitted.ID, edit, http.StatusOK, nil)
+	owner.do(http.MethodPatch, "/v1/animals/"+submitted.ID+"/status", map[string]any{"status": "available", "reason": "cadastro revisado"}, http.StatusOK, nil)
+	advertiser.do(http.MethodPatch, "/v1/animals/"+submitted.ID, edit, http.StatusForbidden, nil)
+	advertiser.do(http.MethodDelete, "/v1/animals/"+submitted.ID, map[string]any{"reason": "Remoção indevida"}, http.StatusForbidden, nil)
+}

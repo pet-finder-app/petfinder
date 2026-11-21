@@ -1,0 +1,20 @@
+DROP TRIGGER contact_revocation ON users;
+DROP FUNCTION close_contact_on_revocation();
+DROP TRIGGER preference_event ON animal_preferences;
+DROP FUNCTION record_preference_event();
+DROP TABLE animal_preference_events;
+
+DROP TRIGGER post_notify ON posts;
+DROP FUNCTION notify_new_post();
+DROP TRIGGER application_notify ON adoption_applications;
+DROP FUNCTION notify_application_participants();
+DROP TRIGGER messages_notify ON messages;
+DROP FUNCTION notify_message_participants();
+ALTER TABLE reports DROP CONSTRAINT reports_subject_check;
+ALTER TABLE reports DROP COLUMN post_id;
+ALTER TABLE reports ADD CONSTRAINT reports_check CHECK(num_nonnulls(organization_id,animal_id,application_id,conversation_id,message_id)>=1);
+DELETE FROM conversations WHERE kind='interested_organization';
+DROP INDEX conversations_interest_idx;
+ALTER TABLE conversations DROP CONSTRAINT conversations_kind_check;
+ALTER TABLE conversations ADD CONSTRAINT conversations_kind_check CHECK(kind IN ('adopter_organization','owner_organization'));
+DROP TABLE conversation_reads,notifications,organization_followers,post_likes,posts,media_uploads;

@@ -15,6 +15,7 @@ import (
 	"github.com/pet-finder-app/petfinder-api/internal/api"
 	"github.com/pet-finder-app/petfinder-api/internal/auth"
 	"github.com/pet-finder-app/petfinder-api/internal/config"
+	"github.com/pet-finder-app/petfinder-api/internal/email"
 )
 
 func main() {
@@ -59,6 +60,9 @@ func run() error {
 		return err
 	}
 	apiServer := api.NewServer(pool, tokens, cfg.AccessTokenTTL, cfg.RefreshTokenTTL)
+	if address := os.Getenv("SMTP_ADDRESS"); address != "" {
+		apiServer.ConfigureEmail(email.SMTP{Address: address, Username: os.Getenv("SMTP_USERNAME"), Password: os.Getenv("SMTP_PASSWORD"), From: os.Getenv("SMTP_FROM")}, os.Getenv("PASSWORD_RESET_URL"))
+	}
 	server := &http.Server{
 		Addr: cfg.HTTPAddress, Handler: apiServer.Handler(), ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout: 15 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 90 * time.Second,

@@ -1,0 +1,10 @@
+DROP TABLE animal_history;
+ALTER TABLE animals DROP COLUMN attributes;
+UPDATE animals SET species='other' WHERE species NOT IN ('dog','cat','other');
+UPDATE animals SET status=CASE WHEN responsible_organization_id IS NULL THEN 'pending_organization' ELSE 'unavailable' END,unavailable_reason='Previously archived' WHERE status='archived';
+ALTER TABLE animals DROP CONSTRAINT animals_organization_status_check;
+ALTER TABLE animals ADD CONSTRAINT animals_organization_status_check CHECK(status='pending_organization' OR responsible_organization_id IS NOT NULL);
+ALTER TABLE animals DROP CONSTRAINT animals_species_check;
+ALTER TABLE animals ADD CONSTRAINT animals_species_check CHECK(species IN ('dog','cat','other'));
+ALTER TABLE animals DROP CONSTRAINT animals_status_check;
+ALTER TABLE animals ADD CONSTRAINT animals_status_check CHECK(status IN ('pending_organization','available','adoption_in_progress','adopted','unavailable','under_review'));

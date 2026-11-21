@@ -159,3 +159,39 @@ func TestChatRejectsOutsiders(t *testing.T) {
 	outsider.do(http.MethodGet, "/v1/conversations/"+s.conversationID+"/messages", nil, http.StatusForbidden, nil)
 	outsider.do(http.MethodPost, "/v1/conversations/"+s.conversationID+"/messages", map[string]any{"body": "intrometido"}, http.StatusForbidden, nil)
 }
+
+// Browsers keep the access token in an HttpOnly cookie, so they exchange it
+// server-side for a conversation-scoped ticket and offer that as a subprotocol.
+func TestChatTicketForBrowsers(t *testing.T) {
+	s := newAdoptionSetup(t)
+	other := newAdoptionSetup(t)
+	outsider := registerUser(t)
+
+	var ticket struct {
+		Ticket      string `json:"ticket"`
+		URL         string `json:"url"`
+		Subprotocol string `json:"subprotocol"`
+	}
+	s.adopter.do(http.MethodPost, "/v1/conversations/"+s.conversationID+"/ws-ticket", nil, http.StatusCreated, &ticket)
+	if ticket.Ticket == "" || ticket.Subprotocol != chatSubprotocol || !strings.HasSuffix(ticket.URL, "/v1/conversations/"+s.conversationID+"/ws") {
+		t.Fatalf("ticket response = %+v", ticket)
+	}
+	outsider.do(http.MethodPost, "/v1/conversations/"+s.conversationID+"/ws-ticket", nil, http.StatusForbidden, nil)
+	client{t: t}.do(http.MethodPost, "/v1/conversations/"+s.conversationID+"/ws-ticket", nil, http.StatusUnauthorized, nil)
+
+	// A ticket is not an access token, and only opens its own conversation.
+	client{t: t, token: ticket.Ticket}.do(http.MethodGet, "/v1/me", nil, http.StatusUnauthorized, nil)
+	if _, res, err := dialChat(t, other.conversationID, &websocket.DialOptions{Subprotocols: []string{chatSubprotocol, "ticket." + ticket.Ticket}}); err == nil || res == nil || res.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("ticket opened another conversation: err %v, response %v", err, res)
+	}
+
+	adopter := connectChat(t, s.conversationID, "ticket-hello", &websocket.DialOptions{Subprotocols: []string{chatSubprotocol, "ticket." + ticket.Ticket}})
+	var sent struct {
+		Message chatMessage `json:"message"`
+	}
+	s.owner.do(http.MethodPost, "/v1/conversations/"+s.conversationID+"/messages", map[string]any{"body": "Recebemos seu pedido."}, http.StatusCreated, &sent)
+	if event := expectEvent(t, adopter, "message.created", ""); event.Message.ID != sent.Message.ID {
+		t.Fatalf("ticket connection received %+v", event.Message)
+	}
+
+}

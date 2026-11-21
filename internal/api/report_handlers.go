@@ -30,6 +30,14 @@ func (s *Server) createReport(w http.ResponseWriter, r *http.Request) {
 	}
 	params := database.CreateReportParams{ReporterID: actor, Category: request.Category, Description: request.Description, Priority: "normal"}
 	switch request.SubjectType {
+	case "post":
+		params.PostID = subjectID
+		var org pgtype.UUID
+		if err := s.pool.QueryRow(r.Context(), "SELECT organization_id FROM posts WHERE id=$1 AND deleted_at IS NULL", subjectID).Scan(&org); err != nil {
+			handleDBError(w, err)
+			return
+		}
+		params.OrganizationID = org
 	case "organization":
 		params.OrganizationID = subjectID
 	case "animal":
@@ -53,7 +61,6 @@ func (s *Server) createReport(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) listReports(w http.ResponseWriter, r *http.Request) {
-	actor, _ := subjectUUID(r)
 	offset, size, page := pagination(r)
 	var orgID pgtype.UUID
 	if value := strings.TrimSpace(r.URL.Query().Get("organization_id")); value != "" {
@@ -63,11 +70,10 @@ func (s *Server) listReports(w http.ResponseWriter, r *http.Request) {
 			invalidPath(w)
 			return
 		}
-		if _, allowed := s.activeMember(r, orgID, actor); !allowed && !hasRole(r, auth.RoleAdmin) {
-			writeServiceError(w, ErrForbidden)
-			return
-		}
-	} else if !hasRole(r, auth.RoleAdmin) {
+	}
+	// Reports carry an organization only when it is the reported subject, so
+	// its members must neither read who reported them nor triage the report.
+	if !hasRole(r, auth.RoleAdmin) {
 		writeServiceError(w, ErrForbidden)
 		return
 	}
@@ -76,7 +82,12 @@ func (s *Server) listReports(w http.ResponseWriter, r *http.Request) {
 		handleDBError(w, err)
 		return
 	}
-	page.Total = len(items)
+	total, err := s.queries.CountOpenReports(r.Context(), database.CountOpenReportsParams{OrganizationID: orgID})
+	if err != nil {
+		handleDBError(w, err)
+		return
+	}
+	page.Total = int(total)
 	writeJSON(w, http.StatusOK, collectionResponse[database.ListOpenReportsRow]{Items: items, Page: page})
 }
 
@@ -85,14 +96,7 @@ func (s *Server) reportAllowed(r *http.Request, report database.Report) bool {
 	if !ok {
 		return false
 	}
-	if actor == report.ReporterID || hasRole(r, auth.RoleAdmin) {
-		return true
-	}
-	if report.OrganizationID.Valid {
-		_, allowed := s.activeMember(r, report.OrganizationID, actor)
-		return allowed
-	}
-	return false
+	return actor == report.ReporterID || hasRole(r, auth.RoleAdmin)
 }
 
 func (s *Server) getReport(w http.ResponseWriter, r *http.Request) {
@@ -119,19 +123,13 @@ func (s *Server) updateReport(w http.ResponseWriter, r *http.Request) {
 		invalidPath(w)
 		return
 	}
-	actor, _ := subjectUUID(r)
-	report, err := s.queries.GetReportByID(r.Context(), id)
-	if err != nil {
-		handleDBError(w, err)
+	if !hasRole(r, auth.RoleAdmin) {
+		writeServiceError(w, ErrForbidden)
 		return
 	}
-	allowed := hasRole(r, auth.RoleAdmin)
-	if report.OrganizationID.Valid {
-		_, member := s.activeMember(r, report.OrganizationID, actor)
-		allowed = allowed || member
-	}
-	if !allowed {
-		writeServiceError(w, ErrForbidden)
+	actor, _ := subjectUUID(r)
+	if _, err := s.queries.GetReportByID(r.Context(), id); err != nil {
+		handleDBError(w, err)
 		return
 	}
 	var request updateReportRequest
@@ -144,6 +142,7 @@ func (s *Server) updateReport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var updated database.Report
+	var err error
 	if request.Status == "investigating" {
 		updated, err = s.queries.SetReportStatus(r.Context(), database.SetReportStatusParams{Status: request.Status, ID: id})
 	} else {

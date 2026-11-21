@@ -36,6 +36,7 @@ func newRouteRegistry(mux *http.ServeMux) *routeRegistry {
 	registry := huma.NewMapRegistry("#/components/schemas/", huma.DefaultSchemaNamer)
 	// pgtype values have custom JSON serialization; document their wire values,
 	// rather than the implementation fields of the pgx wrapper structs.
+	registry.RegisterTypeAlias(reflect.TypeFor[json.RawMessage](), reflect.TypeFor[wireJSON]())
 	registry.RegisterTypeAlias(reflect.TypeFor[pgtype.UUID](), reflect.TypeFor[wireUUID]())
 	registry.RegisterTypeAlias(reflect.TypeFor[pgtype.Timestamptz](), reflect.TypeFor[wireTimestamp]())
 	registry.RegisterTypeAlias(reflect.TypeFor[pgtype.Date](), reflect.TypeFor[wireDate]())
@@ -99,7 +100,8 @@ func adminOnly(reg *routeRegistry, op *huma.Operation) {
 func chatProtocol(reg *routeRegistry, op *huma.Operation) {
 	registry := reg.spec.Components.Schemas
 	op.Description = "Upgrades to a WebSocket using the `" + chatSubprotocol + "` subprotocol. Browsers, which cannot set the " +
-		"Authorization header, may instead offer the access token as an additional `" + bearerSubprotocol + "<token>` subprotocol. " +
+		"Authorization header, may instead offer the access token as an additional `" + bearerSubprotocol + "<token>` subprotocol, or a " +
+		"conversation-scoped ticket from `POST /v1/conversations/{conversationId}/ws-ticket` as a `" + ticketSubprotocol + "<ticket>` subprotocol. " +
 		"Clients send `ChatCommand` text frames and receive `ChatEvent` frames: `message.created` for messages from other " +
 		"connections, `message.ack` answering the sender, and `error`. The server closes the connection with code 4001 when the " +
 		"access token expires; refresh it and reconnect, then list messages to fill any gap."
@@ -149,7 +151,7 @@ func registerRoute[Req, Resp any](reg *routeRegistry, method, path, id, summary,
 	}
 	op.Responses[strconv.Itoa(status)] = response
 	problem := registry.Schema(reflect.TypeFor[Problem](), true, "")
-	for _, code := range []int{400, 401, 403, 404, 409, 422, 500} {
+	for _, code := range []int{400, 401, 403, 404, 409, 422, 429, 500, 503} {
 		schema := problem
 		if code == 401 || code == 403 {
 			schema = &huma.Schema{AnyOf: []*huma.Schema{problem, registry.Schema(reflect.TypeFor[authErrorResponse](), true, "")}}
@@ -206,7 +208,7 @@ type organizationQuery struct {
 }
 
 type animalQuery struct {
-	Species   string  `json:"species,omitempty" enum:"dog,cat,other"`
+	Species   string  `json:"species,omitempty" enum:"dog,cat,bird,rabbit,reptile,small_mammal,other"`
 	Size      string  `json:"size,omitempty" enum:"small,medium,large,extra_large"`
 	State     string  `json:"state,omitempty"`
 	City      string  `json:"city,omitempty"`
@@ -223,9 +225,19 @@ type organizationIDQuery struct {
 }
 
 type applicationQuery struct {
-	Status string `json:"status,omitempty" enum:"submitted,screening,more_information_requested,approved,rejected,withdrawn,completed,cancelled"`
+	Status   string `json:"status,omitempty" enum:"submitted,screening,more_information_requested,approved,rejected,withdrawn,completed,cancelled"`
+	AnimalID string `json:"animal_id,omitempty" format:"uuid" doc:"Only applications for this animal (organization listings)."`
 }
 
 type messagePaginationQuery struct {
-	PageSize int `json:"page_size,omitempty" minimum:"1" maximum:"100" default:"20" doc:"Returns the most recent messages, newest first."`
+	Before   string `json:"before,omitempty" format:"uuid" doc:"Return messages older than this message ID, exclusive. Must belong to this conversation."`
+	PageSize int    `json:"page_size,omitempty" minimum:"1" maximum:"100" default:"20" doc:"Returns the most recent messages, newest first."`
 }
+
+type inventoryQuery struct {
+	Status string `json:"status,omitempty" enum:"pending_organization,available,adoption_in_progress,adopted,unavailable,under_review,archived"`
+}
+
+type wireJSON struct{}
+
+func (wireJSON) Schema(huma.Registry) *huma.Schema { return &huma.Schema{} }

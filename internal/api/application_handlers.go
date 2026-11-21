@@ -22,6 +22,14 @@ func (s *Server) listApplications(w http.ResponseWriter, r *http.Request) {
 	if statusValue != "" {
 		status = &statusValue
 	}
+	var animalID pgtype.UUID
+	if raw := strings.TrimSpace(r.URL.Query().Get("animal_id")); raw != "" {
+		var ok bool
+		if animalID, ok = pathUUIDValue(raw); !ok {
+			invalidPath(w)
+			return
+		}
+	}
 	if rawOrg := strings.TrimSpace(r.URL.Query().Get("organization_id")); rawOrg != "" {
 		orgID, ok := pathUUIDValue(rawOrg)
 		if !ok {
@@ -33,21 +41,31 @@ func (s *Server) listApplications(w http.ResponseWriter, r *http.Request) {
 			writeServiceError(w, ErrForbidden)
 			return
 		}
-		items, err := s.queries.ListOrganizationApplications(r.Context(), database.ListOrganizationApplicationsParams{OrganizationID: orgID, Status: status, PageOffset: offset, PageSize: size})
+		items, err := s.queries.ListOrganizationApplications(r.Context(), database.ListOrganizationApplicationsParams{OrganizationID: orgID, Status: status, AnimalID: animalID, PageOffset: offset, PageSize: size})
 		if err != nil {
 			handleDBError(w, err)
 			return
 		}
-		page.Total = len(items)
+		total, err := s.queries.CountOrganizationApplications(r.Context(), database.CountOrganizationApplicationsParams{OrganizationID: orgID, Status: status, AnimalID: animalID})
+		if err != nil {
+			handleDBError(w, err)
+			return
+		}
+		page.Total = int(total)
 		writeJSON(w, http.StatusOK, collectionResponse[database.ListOrganizationApplicationsRow]{Items: items, Page: page})
 		return
 	}
-	items, err := s.queries.ListAdopterApplications(r.Context(), database.ListAdopterApplicationsParams{AdopterID: actor, PageOffset: offset, PageSize: size})
+	items, err := s.queries.ListAdopterApplications(r.Context(), database.ListAdopterApplicationsParams{AdopterID: actor, Status: status, PageOffset: offset, PageSize: size})
 	if err != nil {
 		handleDBError(w, err)
 		return
 	}
-	page.Total = len(items)
+	total, err := s.queries.CountAdopterApplications(r.Context(), database.CountAdopterApplicationsParams{AdopterID: actor, Status: status})
+	if err != nil {
+		handleDBError(w, err)
+		return
+	}
+	page.Total = int(total)
 	writeJSON(w, http.StatusOK, collectionResponse[database.ListAdopterApplicationsRow]{Items: items, Page: page})
 }
 
@@ -74,6 +92,10 @@ func (s *Server) createApplication(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rollbackTransaction(r.Context(), tx)
 	q := database.New(tx)
+	if _, err = tx.Exec(r.Context(), "SELECT id FROM animals WHERE id=$1 FOR UPDATE", animalID); err != nil {
+		handleDBError(w, err)
+		return
+	}
 	application, err := q.CreateAdoptionApplication(r.Context(), database.CreateAdoptionApplicationParams{AdopterID: actor, ApplicantMessage: request.Introduction, AnimalID: animalID})
 	if err != nil {
 		handleDBError(w, err)
@@ -127,7 +149,19 @@ func (s *Server) getApplication(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	screening, screeningErr := s.queries.GetLatestApplicationScreening(r.Context(), id)
-	response := applicationDetailResponse{Application: application, History: history}
+	conversations, err := s.queries.ListApplicationConversations(r.Context(), id)
+	if err != nil {
+		handleDBError(w, err)
+		return
+	}
+	// Keep the normal conversation visibility boundary even for future channels.
+	visible := make([]database.Conversation, 0, len(conversations))
+	for _, conversation := range conversations {
+		if allowed, _ := s.conversationAllowed(r, conversation); allowed {
+			visible = append(visible, conversation)
+		}
+	}
+	response := applicationDetailResponse{Application: application, History: history, Conversations: visible}
 	if screeningErr == nil {
 		response.Screening = &screening
 	} else if screeningErr != pgx.ErrNoRows {
@@ -177,6 +211,21 @@ func (s *Server) submitScreening(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rollbackTransaction(r.Context(), tx)
 	q := database.New(tx)
+	if _, err = q.LockAdoptionApplication(r.Context(), id); err != nil {
+		handleDBError(w, err)
+		return
+	}
+	application, err = q.GetAdoptionApplicationByID(r.Context(), id)
+	if err != nil {
+		handleDBError(w, err)
+		return
+	}
+	switch domain.ApplicationStatus(application.Status) {
+	case domain.ApplicationPending, domain.ApplicationScreening, domain.ApplicationMoreInfo:
+	default:
+		writeServiceError(w, ErrConflict)
+		return
+	}
 	screening, err := q.GetLatestApplicationScreening(r.Context(), id)
 	if err == pgx.ErrNoRows {
 		questions := []byte(`["housing","household","experience","care_plan","has_other_animals","accepts_follow_up"]`)
@@ -242,6 +291,10 @@ func (s *Server) decideApplication(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, http.StatusConflict, "Invalid state transition", err.Error(), nil)
 		return
 	}
+	if to == string(domain.ApplicationAccepted) && !s.publicOrganization(r, application.OrganizationID) {
+		writeProblem(w, http.StatusConflict, "Organization not verified", "the responsible organization must be verified and active", nil)
+		return
+	}
 	tx, err := s.pool.Begin(r.Context())
 	if err != nil {
 		writeServiceError(w, err)
@@ -249,6 +302,20 @@ func (s *Server) decideApplication(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rollbackTransaction(r.Context(), tx)
 	q := database.New(tx)
+	// Serialize decisions with withdrawals and validate against the locked state.
+	if _, err = database.New(tx).LockAdoptionApplication(r.Context(), id); err != nil {
+		handleDBError(w, err)
+		return
+	}
+	application, err = q.GetAdoptionApplicationByID(r.Context(), id)
+	if err != nil {
+		handleDBError(w, err)
+		return
+	}
+	if err = domain.ValidateApplicationTransition(domain.ApplicationStatus(application.Status), domain.ApplicationStatus(to)); err != nil {
+		writeServiceError(w, ErrConflict)
+		return
+	}
 	updated, err := q.SetApplicationStatus(r.Context(), database.SetApplicationStatusParams{Status: to, Reason: &reason, ActorID: actor, ID: id, OrganizationID: application.OrganizationID})
 	if err != nil {
 		handleDBError(w, err)
@@ -290,7 +357,12 @@ func (s *Server) listConversations(w http.ResponseWriter, r *http.Request) {
 			handleDBError(w, err)
 			return
 		}
-		page.Total = len(items)
+		total, err := s.queries.CountOrganizationConversations(r.Context(), database.CountOrganizationConversationsParams{OrganizationID: orgID})
+		if err != nil {
+			handleDBError(w, err)
+			return
+		}
+		page.Total = int(total)
 		writeJSON(w, http.StatusOK, collectionResponse[database.ListOrganizationConversationsRow]{Items: items, Page: page})
 		return
 	}
@@ -299,7 +371,12 @@ func (s *Server) listConversations(w http.ResponseWriter, r *http.Request) {
 		handleDBError(w, err)
 		return
 	}
-	page.Total = len(items)
+	total, err := s.queries.CountUserConversations(r.Context(), actor)
+	if err != nil {
+		handleDBError(w, err)
+		return
+	}
+	page.Total = int(total)
 	writeJSON(w, http.StatusOK, collectionResponse[database.ListUserConversationsRow]{Items: items, Page: page})
 }
 
@@ -332,12 +409,37 @@ func (s *Server) listMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_, size, page := pagination(r)
-	items, err := s.queries.ListConversationMessages(r.Context(), database.ListConversationMessagesParams{ConversationID: id, IncludeModerated: moderator, PageSize: size})
+	var before pgtype.UUID
+	if raw := r.URL.Query().Get("before"); raw != "" {
+		var valid bool
+		before, valid = pathUUIDValue(raw)
+		if !valid {
+			invalidPath(w)
+			return
+		}
+	}
+	if before.Valid {
+		valid, cursorErr := s.queries.IsVisibleMessageCursor(r.Context(), database.IsVisibleMessageCursorParams{ID: before, ConversationID: id, IncludeModerated: moderator})
+		if cursorErr != nil {
+			handleDBError(w, cursorErr)
+			return
+		}
+		if !valid {
+			writeProblem(w, http.StatusUnprocessableEntity, "Validation failed", "before must identify a visible message in this conversation", nil)
+			return
+		}
+	}
+	items, err := s.queries.ListMessagesBeforeCursor(r.Context(), database.ListMessagesBeforeCursorParams{ConversationID: id, IncludeModerated: moderator, PageSize: size, BeforeID: before})
 	if err != nil {
 		handleDBError(w, err)
 		return
 	}
-	page.Total = len(items)
+	total, err := s.queries.CountConversationMessages(r.Context(), database.CountConversationMessagesParams{ConversationID: id, IncludeModerated: moderator})
+	if err != nil {
+		handleDBError(w, err)
+		return
+	}
+	page.Total = int(total)
 	writeJSON(w, http.StatusOK, collectionResponse[database.Message]{Items: items, Page: page})
 }
 
@@ -373,6 +475,9 @@ func (s *Server) sendMessage(w http.ResponseWriter, r *http.Request) {
 // authorizeMessage reports whether the actor may post to an open conversation
 // and whether they see it as an organization moderator.
 func (s *Server) authorizeMessage(r *http.Request, conversationID pgtype.UUID) (bool, error) {
+	if !s.validAccount(r) {
+		return false, ErrForbidden
+	}
 	conversation, err := s.queries.GetConversationByID(r.Context(), conversationID)
 	if err != nil {
 		return false, serviceError(err)

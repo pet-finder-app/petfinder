@@ -2,10 +2,13 @@ package api
 
 import (
 	"crypto/sha256"
+	"errors"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/pet-finder-app/petfinder-api/internal/auth"
@@ -53,6 +56,10 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 		handleDBError(w, err)
 		return
 	}
+	if err = s.recordRegistrationLegal(r, tx, user.ID, request.TermsDocumentID, request.PrivacyDocumentID); err != nil {
+		writeServiceError(w, err)
+		return
+	}
 	for _, role := range []string{string(auth.RoleAdopter), string(auth.RoleAdvertiser)} {
 		if err := q.GrantUserRole(r.Context(), database.GrantUserRoleParams{UserID: user.ID, RoleKey: role}); err != nil {
 			handleDBError(w, err)
@@ -64,12 +71,12 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 		handleDBError(w, err)
 		return
 	}
-	refresh, _, err := s.createRefreshSession(r, q, user.ID)
+	refresh, _, err := s.createRefreshSession(r, q, user.ID, user.AuthVersion)
 	if err != nil {
 		writeServiceError(w, err)
 		return
 	}
-	access, err := s.tokens.Issue(uuidString(user.ID), roleClaims(roles))
+	access, err := s.tokens.IssueVersion(uuidString(user.ID), roleClaims(roles), int(user.AuthVersion))
 	if err != nil {
 		writeServiceError(w, err)
 		return
@@ -97,12 +104,12 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		handleDBError(w, err)
 		return
 	}
-	refresh, _, err := s.createRefreshSession(r, s.queries, user.ID)
+	refresh, _, err := s.createRefreshSession(r, s.queries, user.ID, user.AuthVersion)
 	if err != nil {
 		handleDBError(w, err)
 		return
 	}
-	access, err := s.tokens.Issue(uuidString(user.ID), roleClaims(roles))
+	access, err := s.tokens.IssueVersion(uuidString(user.ID), roleClaims(roles), int(user.AuthVersion))
 	if err != nil {
 		writeServiceError(w, err)
 		return
@@ -129,11 +136,20 @@ func (s *Server) refresh(w http.ResponseWriter, r *http.Request) {
 	q := database.New(tx)
 	session, err := q.GetActiveRefreshSessionByTokenHash(r.Context(), hash[:])
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			if reused, reuseErr := q.RevokeReusedRefreshFamily(r.Context(), hash[:]); reuseErr == nil && reused > 0 {
+				if commitErr := tx.Commit(r.Context()); commitErr != nil {
+					writeServiceError(w, commitErr)
+					return
+				}
+				slog.Warn("refresh token reuse detected; account sessions revoked")
+			}
+		}
 		writeProblem(w, http.StatusUnauthorized, "Invalid session", "refresh token is invalid or expired", nil)
 		return
 	}
 	user, err := q.GetUserByID(r.Context(), session.UserID)
-	if err != nil {
+	if err != nil || user.DeactivatedAt.Valid {
 		writeProblem(w, http.StatusUnauthorized, "Invalid session", "account is unavailable", nil)
 		return
 	}
@@ -142,7 +158,7 @@ func (s *Server) refresh(w http.ResponseWriter, r *http.Request) {
 		handleDBError(w, err)
 		return
 	}
-	newToken, replacement, err := s.createRefreshSession(r, q, user.ID)
+	newToken, replacement, err := s.createRefreshSession(r, q, user.ID, user.AuthVersion)
 	if err != nil {
 		handleDBError(w, err)
 		return
@@ -152,7 +168,7 @@ func (s *Server) refresh(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, http.StatusUnauthorized, "Invalid session", "refresh token was already used", nil)
 		return
 	}
-	access, err := s.tokens.Issue(uuidString(user.ID), roleClaims(roles))
+	access, err := s.tokens.IssueVersion(uuidString(user.ID), roleClaims(roles), int(user.AuthVersion))
 	if err != nil {
 		writeServiceError(w, err)
 		return
@@ -171,7 +187,7 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 	}
 	hash := sha256.Sum256([]byte(request.RefreshToken))
 	session, err := s.queries.GetActiveRefreshSessionByTokenHash(r.Context(), hash[:])
-	if err == nil {
+	if actor, _ := subjectUUID(r); err == nil && session.UserID == actor {
 		reason := "logout"
 		_, err = s.queries.RevokeRefreshSession(r.Context(), database.RevokeRefreshSessionParams{RevokeReason: &reason, ID: session.ID})
 	}
@@ -239,7 +255,10 @@ func (s *Server) updateProfile(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, http.StatusUnprocessableEntity, "Validation failed", "review the invalid fields", errs)
 		return
 	}
-	user, err := s.queries.UpdateUserProfile(r.Context(), database.UpdateUserProfileParams{DisplayName: name, Phone: phone, City: city, StateCode: state, CountryCode: country, Latitude: lat, Longitude: lng, ID: id})
+	if request.Profile != nil && !validatePersonalProfile(w, request.Profile) {
+		return
+	}
+	user, err := s.queries.UpdateUserProfile(r.Context(), database.UpdateUserProfileParams{PersonalProfile: optionalJSON(request.Profile), DisplayName: name, Phone: phone, City: city, StateCode: state, CountryCode: country, Latitude: lat, Longitude: lng, ID: id})
 	if err != nil {
 		handleDBError(w, err)
 		return

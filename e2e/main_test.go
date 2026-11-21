@@ -46,7 +46,9 @@ func run(m *testing.M) int {
 		return 1
 	}
 	// Request logs would bury test failures; failures already carry the response.
-	slog.SetDefault(slog.New(slog.DiscardHandler))
+	if os.Getenv("E2E_LOGS") == "" {
+		slog.SetDefault(slog.New(slog.DiscardHandler))
+	}
 	ctx := context.Background()
 	var err error
 	pool, err = pgxpool.New(ctx, databaseURL)
@@ -67,6 +69,7 @@ func run(m *testing.M) int {
 		return 1
 	}
 	apiServer := api.NewServer(pool, tokens, accessTTL, time.Hour)
+	apiServer.ConfigureEmail(&testMail, "https://example.com/reset-password")
 	server := httptest.NewServer(apiServer.Handler())
 	defer server.Close()
 	defer apiServer.CloseChat()

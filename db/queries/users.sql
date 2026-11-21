@@ -22,7 +22,10 @@ WHERE email = sqlc.arg(email)
 
 -- name: UpdateUserProfile :one
 UPDATE users
-SET display_name = sqlc.arg(display_name),
+SET personal_profile = COALESCE(sqlc.narg(personal_profile)::jsonb, personal_profile),
+ -- Only an actual identity change invalidates the previous verification.
+ personal_verification_status = CASE WHEN sqlc.narg(personal_profile)::jsonb IS NOT NULL AND personal_profile IS DISTINCT FROM sqlc.narg(personal_profile)::jsonb THEN 'unverified' ELSE personal_verification_status END,
+ display_name = sqlc.arg(display_name),
     phone = sqlc.narg(phone),
     city = sqlc.narg(city),
     state_code = sqlc.narg(state_code),
@@ -40,12 +43,12 @@ RETURNING *;
 
 -- name: UpdateUserPassword :execrows
 UPDATE users
-SET password_hash = sqlc.arg(password_hash)
+SET password_hash = sqlc.arg(password_hash), auth_version = auth_version + 1
 WHERE id = sqlc.arg(id) AND deleted_at IS NULL AND deactivated_at IS NULL;
 
 -- name: DeactivateUser :execrows
 UPDATE users
-SET deactivated_at = now()
+SET deactivated_at = now(), auth_version = auth_version + 1
 WHERE id = sqlc.arg(id) AND deactivated_at IS NULL AND deleted_at IS NULL;
 
 -- name: SoftDeleteUser :execrows

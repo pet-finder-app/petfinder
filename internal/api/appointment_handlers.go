@@ -56,6 +56,10 @@ func (s *Server) createAppointment(w http.ResponseWriter, r *http.Request) {
 		writeServiceError(w, ErrConflict)
 		return
 	}
+	if !s.publicOrganization(r, application.OrganizationID) {
+		writeProblem(w, http.StatusConflict, "Organization not verified", "the responsible organization must be verified and active", nil)
+		return
+	}
 	var request appointmentRequest
 	if !decodeJSON(w, r, &request) {
 		return

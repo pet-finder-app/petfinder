@@ -10,11 +10,13 @@ import (
 // Request types are used by both handlers and the OpenAPI schema generator.
 // Their validation tags are also enforced by decodeJSON.
 type registerRequest struct {
-	Name                  string `json:"name" minLength:"2" maxLength:"120"`
-	Email                 string `json:"email" format:"email" maxLength:"254"`
-	Password              string `json:"password" minLength:"12" maxLength:"72" writeOnly:"true" doc:"Must contain a letter and a number; maximum 72 bytes."`
-	AcceptedTerms         bool   `json:"accepted_terms" enum:"true"`
-	AcceptedPrivacyPolicy bool   `json:"accepted_privacy_policy" enum:"true"`
+	TermsDocumentID       *string `json:"terms_document_id,omitempty" format:"uuid"`
+	PrivacyDocumentID     *string `json:"privacy_document_id,omitempty" format:"uuid"`
+	Name                  string  `json:"name" minLength:"2" maxLength:"120"`
+	Email                 string  `json:"email" format:"email" maxLength:"254"`
+	Password              string  `json:"password" minLength:"12" maxLength:"72" writeOnly:"true" doc:"Must contain a letter and a number; maximum 72 bytes."`
+	AcceptedTerms         bool    `json:"accepted_terms" enum:"true"`
+	AcceptedPrivacyPolicy bool    `json:"accepted_privacy_policy" enum:"true"`
 }
 
 type loginRequest struct {
@@ -27,9 +29,10 @@ type refreshRequest struct {
 }
 
 type updateProfileRequest struct {
-	Name     *string        `json:"name,omitempty" minLength:"2" maxLength:"120"`
-	Phone    *string        `json:"phone,omitempty" maxLength:"30"`
-	Location *locationInput `json:"location,omitempty"`
+	Profile  *personalProfile `json:"profile,omitempty"`
+	Name     *string          `json:"name,omitempty" minLength:"2" maxLength:"120"`
+	Phone    *string          `json:"phone,omitempty" maxLength:"30"`
+	Location *locationInput   `json:"location,omitempty"`
 }
 
 type locationInput struct {
@@ -62,10 +65,13 @@ type updateOfficialChannels struct {
 }
 
 type updateOrganizationRequest struct {
-	Name             *string                 `json:"name,omitempty" minLength:"2" maxLength:"120"`
-	Description      *string                 `json:"description,omitempty" minLength:"20" maxLength:"2000"`
-	OfficialChannels *updateOfficialChannels `json:"official_channels,omitempty"`
-	Location         *locationInput          `json:"location,omitempty"`
+	Slug             *string                     `json:"slug,omitempty" pattern:"^[a-z0-9]+(-[a-z0-9]+)*$" maxLength:"120"`
+	Profile          *organizationPublicProfile  `json:"profile,omitempty"`
+	PrivateProfile   *organizationPrivateProfile `json:"private_profile,omitempty"`
+	Name             *string                     `json:"name,omitempty" minLength:"2" maxLength:"120"`
+	Description      *string                     `json:"description,omitempty" minLength:"20" maxLength:"2000"`
+	OfficialChannels *updateOfficialChannels     `json:"official_channels,omitempty"`
+	Location         *locationInput              `json:"location,omitempty"`
 }
 
 type organizationVerificationRequest struct {
@@ -79,31 +85,33 @@ type addOrganizationMemberRequest struct {
 }
 
 type animalRequest struct {
-	OrganizationID       *string       `json:"organization_id,omitempty" format:"uuid"`
-	Name                 string        `json:"name" minLength:"1" maxLength:"100"`
-	Species              string        `json:"species" enum:"dog,cat,other"`
-	Breed                *string       `json:"breed,omitempty" maxLength:"100"`
-	Size                 string        `json:"size" enum:"small,medium,large,extra_large"`
-	Sex                  string        `json:"sex" enum:"female,male,unknown"`
-	ApproximateBirthDate *string       `json:"approximate_birth_date,omitempty" format:"date"`
-	Description          string        `json:"description" minLength:"20" maxLength:"5000"`
-	HealthNotes          string        `json:"health_notes,omitempty" maxLength:"3000"`
-	BehaviorNotes        string        `json:"behavior_notes,omitempty" maxLength:"3000"`
-	Location             locationInput `json:"location"`
+	Attributes           *animalAttributes `json:"attributes,omitempty"`
+	OrganizationID       *string           `json:"organization_id,omitempty" format:"uuid"`
+	Name                 string            `json:"name" minLength:"1" maxLength:"100"`
+	Species              string            `json:"species" enum:"dog,cat,bird,rabbit,reptile,small_mammal,other"`
+	Breed                *string           `json:"breed,omitempty" maxLength:"100"`
+	Size                 string            `json:"size" enum:"small,medium,large,extra_large"`
+	Sex                  string            `json:"sex" enum:"female,male,unknown"`
+	ApproximateBirthDate *string           `json:"approximate_birth_date,omitempty" format:"date"`
+	Description          string            `json:"description" minLength:"20" maxLength:"5000"`
+	HealthNotes          string            `json:"health_notes,omitempty" maxLength:"3000"`
+	BehaviorNotes        string            `json:"behavior_notes,omitempty" maxLength:"3000"`
+	Location             locationInput     `json:"location"`
 }
 
 // PATCH keeps the same fields as animalRequest but permits omitted fields.
 type updateAnimalRequest struct {
-	Name                 string        `json:"name,omitempty" minLength:"1" maxLength:"100"`
-	Species              string        `json:"species,omitempty" enum:"dog,cat,other"`
-	Breed                *string       `json:"breed,omitempty" maxLength:"100"`
-	Size                 string        `json:"size,omitempty" enum:"small,medium,large,extra_large"`
-	Sex                  string        `json:"sex,omitempty" enum:"female,male,unknown"`
-	ApproximateBirthDate *string       `json:"approximate_birth_date,omitempty" format:"date"`
-	Description          string        `json:"description,omitempty" minLength:"20" maxLength:"5000"`
-	HealthNotes          string        `json:"health_notes,omitempty" maxLength:"3000"`
-	BehaviorNotes        string        `json:"behavior_notes,omitempty" maxLength:"3000"`
-	Location             locationInput `json:"location,omitempty"`
+	Attributes           *animalAttributes `json:"attributes,omitempty"`
+	Name                 string            `json:"name,omitempty" minLength:"1" maxLength:"100"`
+	Species              string            `json:"species,omitempty" enum:"dog,cat,bird,rabbit,reptile,small_mammal,other"`
+	Breed                *string           `json:"breed,omitempty" maxLength:"100"`
+	Size                 string            `json:"size,omitempty" enum:"small,medium,large,extra_large"`
+	Sex                  string            `json:"sex,omitempty" enum:"female,male,unknown"`
+	ApproximateBirthDate *string           `json:"approximate_birth_date,omitempty" format:"date"`
+	Description          string            `json:"description,omitempty" minLength:"20" maxLength:"5000"`
+	HealthNotes          string            `json:"health_notes,omitempty" maxLength:"3000"`
+	BehaviorNotes        string            `json:"behavior_notes,omitempty" maxLength:"3000"`
+	Location             locationInput     `json:"location,omitempty"`
 }
 
 type animalStatusRequest struct {
@@ -173,7 +181,7 @@ type appointmentConfirmationRequest struct {
 type reportRequest struct {
 	Category    string `json:"category" enum:"payment_request,fraud,harassment,inappropriate_content,off_platform_contact,animal_welfare,other"`
 	Description string `json:"description" minLength:"10" maxLength:"5000"`
-	SubjectType string `json:"subject_type" enum:"animal,organization,application,conversation,message"`
+	SubjectType string `json:"subject_type" enum:"animal,organization,application,conversation,message,post"`
 	SubjectID   string `json:"subject_id" format:"uuid"`
 }
 
@@ -201,14 +209,16 @@ type locationResponse struct {
 }
 
 type userResponse struct {
-	ID        string            `json:"id" format:"uuid"`
-	Name      string            `json:"name"`
-	Email     string            `json:"email" format:"email"`
-	Phone     *string           `json:"phone"`
-	Roles     []string          `json:"roles"`
-	Location  *locationResponse `json:"location"`
-	CreatedAt *time.Time        `json:"created_at"`
-	UpdatedAt *time.Time        `json:"updated_at"`
+	Profile            personalProfile   `json:"profile"`
+	VerificationStatus string            `json:"verification_status"`
+	ID                 string            `json:"id" format:"uuid"`
+	Name               string            `json:"name"`
+	Email              string            `json:"email" format:"email"`
+	Phone              *string           `json:"phone"`
+	Roles              []string          `json:"roles"`
+	Location           *locationResponse `json:"location"`
+	CreatedAt          *time.Time        `json:"created_at"`
+	UpdatedAt          *time.Time        `json:"updated_at"`
 }
 
 type authSessionResponse struct {
@@ -220,18 +230,21 @@ type authSessionResponse struct {
 }
 
 type organizationResponse struct {
-	ID                 string                   `json:"id" format:"uuid"`
-	Name               string                   `json:"name"`
-	Description        string                   `json:"description"`
-	VerificationStatus string                   `json:"verification_status" enum:"pending,verified,rejected,suspended"`
-	VerifiedAt         *time.Time               `json:"verified_at"`
-	OfficialChannels   officialChannelsResponse `json:"official_channels"`
-	Location           locationResponse         `json:"location"`
-	CreatedAt          *time.Time               `json:"created_at"`
-	UpdatedAt          *time.Time               `json:"updated_at"`
-	LegalName          *string                  `json:"legal_name,omitempty" doc:"Visible to authorized representatives and administrators."`
-	RegistrationNumber **string                 `json:"registration_number,omitempty"`
-	VerificationNotes  **string                 `json:"verification_notes,omitempty"`
+	Profile            organizationPublicProfile   `json:"profile"`
+	PrivateProfile     *organizationPrivateProfile `json:"private_profile,omitempty"`
+	Slug               string                      `json:"slug"`
+	ID                 string                      `json:"id" format:"uuid"`
+	Name               string                      `json:"name"`
+	Description        string                      `json:"description"`
+	VerificationStatus string                      `json:"verification_status" enum:"pending,verified,rejected,suspended"`
+	VerifiedAt         *time.Time                  `json:"verified_at"`
+	OfficialChannels   officialChannelsResponse    `json:"official_channels"`
+	Location           locationResponse            `json:"location"`
+	CreatedAt          *time.Time                  `json:"created_at"`
+	UpdatedAt          *time.Time                  `json:"updated_at"`
+	LegalName          *string                     `json:"legal_name,omitempty" doc:"Visible to authorized representatives and administrators."`
+	RegistrationNumber **string                    `json:"registration_number,omitempty"`
+	VerificationNotes  **string                    `json:"verification_notes,omitempty" nullable:"true" doc:"Visible to authorized representatives and administrators."`
 }
 
 type officialChannelsResponse struct {
@@ -243,7 +256,7 @@ type officialChannelsResponse struct {
 type pageResponse struct {
 	Page     int `json:"page" minimum:"1"`
 	PageSize int `json:"page_size" minimum:"1" maximum:"100"`
-	Total    int `json:"total" minimum:"0" doc:"Number of items in this page."`
+	Total    int `json:"total" minimum:"0" doc:"Number of items across all pages."`
 }
 
 type collectionResponse[T any] struct {
@@ -275,9 +288,10 @@ type applicationCreatedResponse struct {
 }
 
 type applicationDetailResponse struct {
-	Application database.GetAdoptionApplicationByIDRow `json:"application"`
-	History     []database.ApplicationStatusHistory    `json:"history"`
-	Screening   *database.ApplicationScreening         `json:"screening,omitempty"`
+	Conversations []database.Conversation                `json:"conversations"`
+	Application   database.GetAdoptionApplicationByIDRow `json:"application"`
+	History       []database.ApplicationStatusHistory    `json:"history"`
+	Screening     *database.ApplicationScreening         `json:"screening,omitempty"`
 }
 
 type messageResponse struct {
@@ -288,4 +302,28 @@ type messageResponse struct {
 type issuedOTPResponse struct {
 	Code      string    `json:"code" pattern:"^[0-9]{6}$"`
 	ExpiresAt time.Time `json:"expires_at"`
+}
+
+// Membership status is separate from the organization's verification decision.
+type memberOrganizationResponse struct {
+	Organization     organizationResponse `json:"organization"`
+	MembershipStatus string               `json:"membership_status" enum:"active,invited"`
+	MemberRole       string               `json:"member_role"`
+}
+
+type appointmentDetailResponse struct {
+	Appointment   database.Appointment               `json:"appointment"`
+	Confirmations []database.AppointmentConfirmation `json:"confirmations"`
+}
+
+type withdrawalRequest struct {
+	Reason string `json:"reason" minLength:"5" maxLength:"2000"`
+}
+
+type appointmentListResponse struct {
+	Items []database.Appointment `json:"items"`
+}
+
+type imageModerationRequest struct {
+	Decision string `json:"decision" enum:"approved,rejected"`
 }

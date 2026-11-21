@@ -58,3 +58,16 @@ func containsReport(items []report, id string) bool {
 	}
 	return false
 }
+
+// A reported organization must not learn who reported it nor dismiss the report.
+func TestReportedOrganizationCannotTriageItsReport(t *testing.T) {
+	s := newAdoptionSetup(t)
+	var created report
+	s.adopter.do(http.MethodPost, "/v1/reports", map[string]any{
+		"category": "fraud", "description": "A ONG pediu pagamento fora da plataforma.",
+		"subject_type": "organization", "subject_id": s.org.ID,
+	}, http.StatusCreated, &created)
+	s.owner.do(http.MethodGet, "/v1/reports?organization_id="+s.org.ID, nil, http.StatusForbidden, nil)
+	s.owner.do(http.MethodGet, "/v1/reports/"+created.ID, nil, http.StatusForbidden, nil)
+	s.owner.do(http.MethodPatch, "/v1/reports/"+created.ID, map[string]any{"status": "dismissed", "resolution": "Sem fundamento."}, http.StatusForbidden, nil)
+}

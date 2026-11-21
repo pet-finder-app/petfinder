@@ -8,6 +8,12 @@ WHERE a.id = sqlc.arg(animal_id)
   AND a.status = 'available'
   AND a.deleted_at IS NULL
   AND EXISTS (
+      SELECT 1 FROM organizations o
+      WHERE o.id = a.responsible_organization_id
+        AND o.verification_status = 'verified'
+        AND o.deactivated_at IS NULL
+  )
+  AND EXISTS (
       SELECT 1 FROM animal_preferences p
       WHERE p.user_id = sqlc.arg(adopter_id)
         AND p.animal_id = a.id
@@ -18,6 +24,7 @@ RETURNING *;
 -- name: GetAdoptionApplicationByID :one
 SELECT aa.*, a.name AS animal_name, a.status AS animal_status,
        u.display_name AS adopter_name, u.email AS adopter_email,
+       u.personal_verification_status AS adopter_verification_status,
        o.display_name AS organization_name
 FROM adoption_applications aa
 JOIN animals a ON a.id = aa.animal_id
@@ -26,7 +33,8 @@ JOIN organizations o ON o.id = aa.organization_id
 WHERE aa.id = sqlc.arg(id);
 
 -- name: ListOrganizationApplications :many
-SELECT aa.*, a.name AS animal_name, u.display_name AS adopter_name
+SELECT aa.*, a.name AS animal_name, u.display_name AS adopter_name,
+       u.personal_verification_status AS adopter_verification_status
 FROM adoption_applications aa
 JOIN animals a ON a.id = aa.animal_id
 JOIN users u ON u.id = aa.adopter_id
@@ -42,6 +50,7 @@ FROM adoption_applications aa
 JOIN animals a ON a.id = aa.animal_id
 JOIN organizations o ON o.id = aa.organization_id
 WHERE aa.adopter_id = sqlc.arg(adopter_id)
+  AND (sqlc.narg(status)::text IS NULL OR aa.status = sqlc.narg(status))
 ORDER BY aa.created_at DESC, aa.id
 LIMIT sqlc.arg(page_size)::int OFFSET sqlc.arg(page_offset)::int;
 
@@ -130,3 +139,6 @@ RETURNING *;
 SELECT * FROM post_adoption_followups
 WHERE application_id = sqlc.arg(application_id)
 ORDER BY occurred_at DESC, id;
+
+-- name: LockAdoptionApplication :one
+SELECT id FROM adoption_applications WHERE id = sqlc.arg(id) FOR UPDATE;

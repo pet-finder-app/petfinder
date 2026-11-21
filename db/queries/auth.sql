@@ -1,17 +1,17 @@
 -- name: CreateRefreshSession :one
 INSERT INTO refresh_sessions (
-    user_id, token_hash, user_agent, ip_address, expires_at
+    user_id, token_hash, user_agent, ip_address, expires_at, auth_version
 ) VALUES (
     sqlc.arg(user_id), sqlc.arg(token_hash), sqlc.narg(user_agent),
-    sqlc.narg(ip_address), sqlc.arg(expires_at)
+    sqlc.narg(ip_address), sqlc.arg(expires_at), sqlc.arg(auth_version)
 )
 RETURNING *;
 
 -- name: GetActiveRefreshSessionByTokenHash :one
-SELECT * FROM refresh_sessions
-WHERE token_hash = sqlc.arg(token_hash)
-  AND revoked_at IS NULL
-  AND expires_at > now();
+SELECT rs.* FROM refresh_sessions rs JOIN users u ON u.id=rs.user_id
+WHERE rs.token_hash = sqlc.arg(token_hash)
+  AND rs.revoked_at IS NULL AND rs.expires_at > now()
+  AND rs.auth_version=u.auth_version AND u.deactivated_at IS NULL AND u.deleted_at IS NULL;
 
 -- name: TouchRefreshSession :execrows
 UPDATE refresh_sessions
@@ -73,3 +73,20 @@ WHERE user_id = sqlc.arg(user_id)
 -- name: DeleteExpiredPasswordResetTokens :execrows
 DELETE FROM password_reset_tokens
 WHERE expires_at < sqlc.arg(expired_before);
+
+-- name: RevokeReusedRefreshFamily :execrows
+-- A refresh token presented again well after it was rotated indicates theft:
+-- end every session of its account and invalidate outstanding access tokens.
+-- The grace period tolerates concurrent refreshes of the same token.
+WITH reused AS (
+    SELECT rs.user_id FROM refresh_sessions rs
+    WHERE rs.token_hash = sqlc.arg(token_hash)
+      AND rs.revoke_reason = 'rotated'
+      AND rs.revoked_at < now() - interval '30 seconds'
+), revoked AS (
+    UPDATE refresh_sessions
+    SET revoked_at = now(), revoke_reason = 'reuse_detected'
+    WHERE user_id IN (SELECT user_id FROM reused) AND revoked_at IS NULL
+)
+UPDATE users SET auth_version = auth_version + 1
+WHERE id IN (SELECT user_id FROM reused);

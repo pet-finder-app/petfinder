@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -91,6 +92,7 @@ func userView(user database.User, roles []database.Role) userResponse {
 		location = &locationResponse{City: user.City, State: user.StateCode, CountryCode: user.CountryCode}
 	}
 	return userResponse{
+		Profile: decodePersonalProfile(user.PersonalProfile), VerificationStatus: user.PersonalVerificationStatus,
 		ID: uuidString(user.ID), Name: user.DisplayName, Email: user.Email,
 		Phone: user.Phone, Roles: roleNames, Location: location,
 		CreatedAt: timestamp(user.CreatedAt), UpdatedAt: timestamp(user.UpdatedAt),
@@ -98,14 +100,18 @@ func userView(user database.User, roles []database.Role) userResponse {
 }
 
 func organizationView(org database.Organization, privileged bool) organizationResponse {
-	result := organizationResponse{
+	result := organizationResponse{Slug: org.Slug,
 		ID: uuidString(org.ID), Name: org.DisplayName, Description: org.Description,
 		VerificationStatus: org.VerificationStatus, VerifiedAt: timestamp(org.VerifiedAt),
 		OfficialChannels: officialChannelsResponse{Website: org.WebsiteUrl, Email: org.OfficialEmail, Phone: org.OfficialPhone},
 		Location:         locationResponse{City: &org.City, State: &org.StateCode, CountryCode: org.CountryCode},
 		CreatedAt:        timestamp(org.CreatedAt), UpdatedAt: timestamp(org.UpdatedAt),
 	}
+	_ = json.Unmarshal(org.PublicProfile, &result.Profile)
 	if privileged {
+		var private organizationPrivateProfile
+		_ = json.Unmarshal(org.PrivateProfile, &private)
+		result.PrivateProfile = &private
 		result.LegalName = &org.LegalName
 		result.RegistrationNumber = &org.RegistrationNumber
 		result.VerificationNotes = &org.VerificationNotes
@@ -147,7 +153,7 @@ func clientAddress(r *http.Request) *netip.Addr {
 	return &parsed
 }
 
-func (s *Server) createRefreshSession(r *http.Request, q *database.Queries, userID pgtype.UUID) (string, database.RefreshSession, error) {
+func (s *Server) createRefreshSession(r *http.Request, q *database.Queries, userID pgtype.UUID, version int32) (string, database.RefreshSession, error) {
 	token, hash, err := randomToken(32)
 	if err != nil {
 		return "", database.RefreshSession{}, err
@@ -157,7 +163,7 @@ func (s *Server) createRefreshSession(r *http.Request, q *database.Queries, user
 	if ua != "" {
 		userAgent = &ua
 	}
-	session, err := q.CreateRefreshSession(r.Context(), database.CreateRefreshSessionParams{
+	session, err := q.CreateRefreshSession(r.Context(), database.CreateRefreshSessionParams{AuthVersion: version,
 		UserID: userID, TokenHash: hash, UserAgent: userAgent, IpAddress: clientAddress(r),
 		ExpiresAt: pgtype.Timestamptz{Time: time.Now().UTC().Add(s.refreshTTL), Valid: true},
 	})
@@ -224,4 +230,21 @@ func slugify(value string) string {
 		}
 	}
 	return strings.Trim(b.String(), "-")
+}
+
+func decodePersonalProfile(data []byte) personalProfile {
+	var result personalProfile
+	_ = json.Unmarshal(data, &result)
+	return result
+}
+
+// countRows runs a COUNT query for a collection's total and writes the error
+// response itself when it fails.
+func (s *Server) countRows(w http.ResponseWriter, r *http.Request, query string, args ...any) (int, bool) {
+	var total int
+	if err := s.pool.QueryRow(r.Context(), query, args...).Scan(&total); err != nil {
+		handleDBError(w, err)
+		return 0, false
+	}
+	return total, true
 }

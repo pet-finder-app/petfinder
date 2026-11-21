@@ -36,7 +36,16 @@ LIMIT sqlc.arg(page_size)::int OFFSET sqlc.arg(page_offset)::int;
 
 -- name: UpdateOrganizationProfile :one
 UPDATE organizations
-SET display_name = sqlc.arg(display_name),
+SET slug = COALESCE(sqlc.narg(slug)::citext, slug),
+ public_profile = COALESCE(sqlc.narg(public_profile)::jsonb, public_profile),
+ private_profile = COALESCE(sqlc.narg(private_profile)::jsonb, private_profile),
+ -- A verified organization whose private evidence or public name actually
+-- changes must be verified again; other statuses only change through review.
+verification_status=CASE
+    WHEN verification_status = 'verified' AND sqlc.narg(private_profile)::jsonb IS NOT NULL AND private_profile IS DISTINCT FROM sqlc.narg(private_profile)::jsonb THEN 'pending'
+    WHEN verification_status = 'verified' AND display_name IS DISTINCT FROM sqlc.arg(display_name) THEN 'pending'
+    ELSE verification_status END,
+ display_name = sqlc.arg(display_name),
     description = sqlc.arg(description),
     official_email = sqlc.arg(official_email),
     official_phone = sqlc.narg(official_phone),
@@ -73,11 +82,37 @@ INSERT INTO organization_members (
     sqlc.arg(can_manage_members), sqlc.arg(can_publish_animals),
     sqlc.arg(can_manage_applications), sqlc.arg(invited_by)
 )
+-- Declined and removed people may be invited again; current members may not.
+ON CONFLICT (organization_id, user_id) DO UPDATE
+SET status = 'invited',
+    member_role = EXCLUDED.member_role,
+    can_manage_members = EXCLUDED.can_manage_members,
+    can_publish_animals = EXCLUDED.can_publish_animals,
+    can_manage_applications = EXCLUDED.can_manage_applications,
+    invited_by = EXCLUDED.invited_by,
+    joined_at = NULL,
+    deactivated_at = NULL,
+    updated_at = now()
+WHERE organization_members.status IN ('declined', 'removed')
 RETURNING *;
 
 -- name: AcceptOrganizationMembership :one
 UPDATE organization_members
 SET status = 'active', joined_at = now(), deactivated_at = NULL
+WHERE id = sqlc.arg(id) AND user_id = sqlc.arg(user_id) AND status = 'invited'
+RETURNING *;
+
+-- name: GetInvitedOrganizationMember :one
+SELECT om.* FROM organization_members om
+JOIN organizations o ON o.id = om.organization_id
+WHERE om.organization_id = sqlc.arg(organization_id)
+  AND om.user_id = sqlc.arg(user_id)
+  AND om.status = 'invited'
+  AND o.deactivated_at IS NULL;
+
+-- name: DeclineOrganizationMembership :one
+UPDATE organization_members
+SET status = 'declined', deactivated_at = now()
 WHERE id = sqlc.arg(id) AND user_id = sqlc.arg(user_id) AND status = 'invited'
 RETURNING *;
 
@@ -108,3 +143,13 @@ JOIN users u ON u.id = om.user_id
 WHERE om.organization_id = sqlc.arg(organization_id)
   AND (sqlc.narg(status)::text IS NULL OR om.status = sqlc.narg(status))
 ORDER BY om.created_at, om.id;
+
+-- name: ListMemberOrganizations :many
+SELECT sqlc.embed(o), om.status AS membership_status, om.member_role
+FROM organizations o
+JOIN organization_members om ON om.organization_id = o.id
+WHERE om.user_id = sqlc.arg(user_id)
+  AND om.status IN ('invited', 'active')
+  AND o.deactivated_at IS NULL
+ORDER BY o.display_name, o.id
+LIMIT sqlc.arg(page_size)::int OFFSET sqlc.arg(page_offset)::int;
