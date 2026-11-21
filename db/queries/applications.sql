@@ -50,6 +50,7 @@ FROM adoption_applications aa
 JOIN animals a ON a.id = aa.animal_id
 JOIN organizations o ON o.id = aa.organization_id
 WHERE aa.adopter_id = sqlc.arg(adopter_id)
+  AND (sqlc.narg(status)::text IS NULL OR aa.status = sqlc.narg(status))
 ORDER BY aa.created_at DESC, aa.id
 LIMIT sqlc.arg(page_size)::int OFFSET sqlc.arg(page_offset)::int;
 

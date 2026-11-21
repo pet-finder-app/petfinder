@@ -25,6 +25,10 @@ type postResponse struct {
 	Liked          bool      `json:"liked"`
 	CreatedAt      time.Time `json:"created_at"`
 	UpdatedAt      time.Time `json:"updated_at"`
+	// Organization identity, so feeds need no extra organization lookups.
+	OrganizationName    string  `json:"organization_name"`
+	OrganizationSlug    string  `json:"organization_slug"`
+	OrganizationLogoURL *string `json:"organization_logo_url"`
 }
 type countResponse struct {
 	Count int `json:"count"`
@@ -34,7 +38,7 @@ type organizationFollowersResponse struct {
 	Following     bool `json:"following"`
 }
 
-const postProjection = `jsonb_build_object('id',p.id,'organization_id',p.organization_id,'author_id',p.author_id,'body',p.body,'media_ids',p.media_ids,'tags',p.tags,'created_at',p.created_at,'updated_at',p.updated_at,'like_count',(SELECT count(*) FROM post_likes l WHERE l.post_id=p.id),'liked',EXISTS(SELECT 1 FROM post_likes l WHERE l.post_id=p.id AND l.user_id=$1))`
+const postProjection = `jsonb_build_object('id',p.id,'organization_id',p.organization_id,'organization_name',(SELECT po.display_name FROM organizations po WHERE po.id=p.organization_id),'organization_slug',(SELECT po.slug FROM organizations po WHERE po.id=p.organization_id),'organization_logo_url',(SELECT NULLIF(po.public_profile->>'logo_url','') FROM organizations po WHERE po.id=p.organization_id),'author_id',p.author_id,'body',p.body,'media_ids',p.media_ids,'tags',p.tags,'created_at',p.created_at,'updated_at',p.updated_at,'like_count',(SELECT count(*) FROM post_likes l WHERE l.post_id=p.id),'liked',EXISTS(SELECT 1 FROM post_likes l WHERE l.post_id=p.id AND l.user_id=$1))`
 
 func registerCommunityRoutes(s *Server, reg *routeRegistry) {
 	registerRoute[noBody, collectionResponse[postResponse]](reg, "GET", "/v1/posts", "listPosts", "List public organization posts", "Posts", 200, s.optionalAuth(s.listPosts), bearerAuth(true), queryParameters[paginationQuery], queryParameters[organizationIDQuery])
@@ -112,7 +116,11 @@ func (s *Server) listPosts(w http.ResponseWriter, r *http.Request) {
 		handleDBError(w, err)
 		return
 	}
-	page.Total = len(items)
+	total, ok := s.countRows(w, r, `SELECT count(*) FROM posts p JOIN organizations o ON o.id=p.organization_id WHERE p.deleted_at IS NULL AND o.verification_status='verified' AND o.deactivated_at IS NULL AND ($2::uuid IS NULL OR p.organization_id=$2) AND (NOT $3::boolean OR EXISTS(SELECT 1 FROM organization_followers f WHERE f.organization_id=p.organization_id AND f.user_id=$1))`, actor, org, following)
+	if !ok {
+		return
+	}
+	page.Total = total
 	writeJSON(w, 200, collectionResponse[postResponse]{Items: items, Page: page})
 }
 func (s *Server) getPost(w http.ResponseWriter, r *http.Request) {
@@ -288,7 +296,7 @@ func (s *Server) organizationFollowers(w http.ResponseWriter, r *http.Request) {
 func (s *Server) listFollowing(w http.ResponseWriter, r *http.Request) {
 	actor, _ := subjectUUID(r)
 	offset, size, page := pagination(r)
-	rows, err := s.pool.Query(r.Context(), `SELECT organization_id FROM organization_followers WHERE user_id=$1 ORDER BY created_at DESC,organization_id LIMIT $2 OFFSET $3`, actor, size, offset)
+	rows, err := s.pool.Query(r.Context(), `SELECT f.organization_id FROM organization_followers f JOIN organizations o ON o.id=f.organization_id AND o.deactivated_at IS NULL WHERE f.user_id=$1 ORDER BY f.created_at DESC,f.organization_id LIMIT $2 OFFSET $3`, actor, size, offset)
 	if err != nil {
 		handleDBError(w, err)
 		return
@@ -320,6 +328,10 @@ func (s *Server) listFollowing(w http.ResponseWriter, r *http.Request) {
 		}
 		items = append(items, organizationView(org, false))
 	}
-	page.Total = len(items)
+	total, ok := s.countRows(w, r, `SELECT count(*) FROM organization_followers f JOIN organizations o ON o.id=f.organization_id AND o.deactivated_at IS NULL WHERE f.user_id=$1`, actor)
+	if !ok {
+		return
+	}
+	page.Total = total
 	writeJSON(w, 200, collectionResponse[organizationResponse]{Items: items, Page: page})
 }

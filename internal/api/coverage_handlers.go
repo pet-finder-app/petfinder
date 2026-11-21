@@ -22,7 +22,12 @@ func (s *Server) listMyOrganizations(w http.ResponseWriter, r *http.Request) {
 	for _, item := range items {
 		views = append(views, memberOrganizationResponse{Organization: organizationView(item.Organization, item.MembershipStatus == "active"), MembershipStatus: item.MembershipStatus, MemberRole: item.MemberRole})
 	}
-	page.Total = len(views)
+	total, err := s.queries.CountMemberOrganizations(r.Context(), actor)
+	if err != nil {
+		handleDBError(w, err)
+		return
+	}
+	page.Total = int(total)
 	writeJSON(w, http.StatusOK, collectionResponse[memberOrganizationResponse]{Items: views, Page: page})
 }
 
@@ -34,7 +39,12 @@ func (s *Server) listMyAnimals(w http.ResponseWriter, r *http.Request) {
 		handleDBError(w, err)
 		return
 	}
-	page.Total = len(items)
+	total, err := s.queries.CountAnimalsBySubmitter(r.Context(), actor)
+	if err != nil {
+		handleDBError(w, err)
+		return
+	}
+	page.Total = int(total)
 	writeJSON(w, http.StatusOK, collectionResponse[database.Animal]{Items: items, Page: page})
 }
 
@@ -65,7 +75,12 @@ func (s *Server) listOrganizationAnimals(w http.ResponseWriter, r *http.Request)
 		handleDBError(w, err)
 		return
 	}
-	page.Total = len(items)
+	total, err := s.queries.CountAnimalsByOrganization(r.Context(), database.CountAnimalsByOrganizationParams{OrganizationID: id, Status: status})
+	if err != nil {
+		handleDBError(w, err)
+		return
+	}
+	page.Total = int(total)
 	writeJSON(w, http.StatusOK, collectionResponse[database.Animal]{Items: items, Page: page})
 }
 

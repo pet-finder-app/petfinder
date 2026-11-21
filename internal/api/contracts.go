@@ -256,7 +256,7 @@ type officialChannelsResponse struct {
 type pageResponse struct {
 	Page     int `json:"page" minimum:"1"`
 	PageSize int `json:"page_size" minimum:"1" maximum:"100"`
-	Total    int `json:"total" minimum:"0" doc:"Number of items in this page."`
+	Total    int `json:"total" minimum:"0" doc:"Number of items across all pages."`
 }
 
 type collectionResponse[T any] struct {

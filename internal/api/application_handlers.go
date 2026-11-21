@@ -22,6 +22,14 @@ func (s *Server) listApplications(w http.ResponseWriter, r *http.Request) {
 	if statusValue != "" {
 		status = &statusValue
 	}
+	var animalID pgtype.UUID
+	if raw := strings.TrimSpace(r.URL.Query().Get("animal_id")); raw != "" {
+		var ok bool
+		if animalID, ok = pathUUIDValue(raw); !ok {
+			invalidPath(w)
+			return
+		}
+	}
 	if rawOrg := strings.TrimSpace(r.URL.Query().Get("organization_id")); rawOrg != "" {
 		orgID, ok := pathUUIDValue(rawOrg)
 		if !ok {
@@ -33,21 +41,31 @@ func (s *Server) listApplications(w http.ResponseWriter, r *http.Request) {
 			writeServiceError(w, ErrForbidden)
 			return
 		}
-		items, err := s.queries.ListOrganizationApplications(r.Context(), database.ListOrganizationApplicationsParams{OrganizationID: orgID, Status: status, PageOffset: offset, PageSize: size})
+		items, err := s.queries.ListOrganizationApplications(r.Context(), database.ListOrganizationApplicationsParams{OrganizationID: orgID, Status: status, AnimalID: animalID, PageOffset: offset, PageSize: size})
 		if err != nil {
 			handleDBError(w, err)
 			return
 		}
-		page.Total = len(items)
+		total, err := s.queries.CountOrganizationApplications(r.Context(), database.CountOrganizationApplicationsParams{OrganizationID: orgID, Status: status, AnimalID: animalID})
+		if err != nil {
+			handleDBError(w, err)
+			return
+		}
+		page.Total = int(total)
 		writeJSON(w, http.StatusOK, collectionResponse[database.ListOrganizationApplicationsRow]{Items: items, Page: page})
 		return
 	}
-	items, err := s.queries.ListAdopterApplications(r.Context(), database.ListAdopterApplicationsParams{AdopterID: actor, PageOffset: offset, PageSize: size})
+	items, err := s.queries.ListAdopterApplications(r.Context(), database.ListAdopterApplicationsParams{AdopterID: actor, Status: status, PageOffset: offset, PageSize: size})
 	if err != nil {
 		handleDBError(w, err)
 		return
 	}
-	page.Total = len(items)
+	total, err := s.queries.CountAdopterApplications(r.Context(), database.CountAdopterApplicationsParams{AdopterID: actor, Status: status})
+	if err != nil {
+		handleDBError(w, err)
+		return
+	}
+	page.Total = int(total)
 	writeJSON(w, http.StatusOK, collectionResponse[database.ListAdopterApplicationsRow]{Items: items, Page: page})
 }
 
@@ -339,7 +357,12 @@ func (s *Server) listConversations(w http.ResponseWriter, r *http.Request) {
 			handleDBError(w, err)
 			return
 		}
-		page.Total = len(items)
+		total, err := s.queries.CountOrganizationConversations(r.Context(), database.CountOrganizationConversationsParams{OrganizationID: orgID})
+		if err != nil {
+			handleDBError(w, err)
+			return
+		}
+		page.Total = int(total)
 		writeJSON(w, http.StatusOK, collectionResponse[database.ListOrganizationConversationsRow]{Items: items, Page: page})
 		return
 	}
@@ -348,7 +371,12 @@ func (s *Server) listConversations(w http.ResponseWriter, r *http.Request) {
 		handleDBError(w, err)
 		return
 	}
-	page.Total = len(items)
+	total, err := s.queries.CountUserConversations(r.Context(), actor)
+	if err != nil {
+		handleDBError(w, err)
+		return
+	}
+	page.Total = int(total)
 	writeJSON(w, http.StatusOK, collectionResponse[database.ListUserConversationsRow]{Items: items, Page: page})
 }
 
@@ -406,7 +434,12 @@ func (s *Server) listMessages(w http.ResponseWriter, r *http.Request) {
 		handleDBError(w, err)
 		return
 	}
-	page.Total = len(items)
+	total, err := s.queries.CountConversationMessages(r.Context(), database.CountConversationMessagesParams{ConversationID: id, IncludeModerated: moderator})
+	if err != nil {
+		handleDBError(w, err)
+		return
+	}
+	page.Total = int(total)
 	writeJSON(w, http.StatusOK, collectionResponse[database.Message]{Items: items, Page: page})
 }
 

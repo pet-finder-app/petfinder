@@ -274,7 +274,11 @@ func (s *Server) verificationQueue(w http.ResponseWriter, r *http.Request) {
 		handleDBError(w, err)
 		return
 	}
-	page.Total = len(items)
+	total, ok := s.countRows(w, r, `SELECT count(*) FROM verification_submissions WHERE CASE WHEN $1='' THEN status IN ('submitted','under_review') ELSE status=$1 END`, status)
+	if !ok {
+		return
+	}
+	page.Total = total
 	writeJSON(w, 200, collectionResponse[verificationReviewItem]{Items: items, Page: page})
 }
 func (s *Server) getVerificationReview(w http.ResponseWriter, r *http.Request) {

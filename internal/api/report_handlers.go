@@ -82,7 +82,12 @@ func (s *Server) listReports(w http.ResponseWriter, r *http.Request) {
 		handleDBError(w, err)
 		return
 	}
-	page.Total = len(items)
+	total, err := s.queries.CountOpenReports(r.Context(), database.CountOpenReportsParams{OrganizationID: orgID})
+	if err != nil {
+		handleDBError(w, err)
+		return
+	}
+	page.Total = int(total)
 	writeJSON(w, http.StatusOK, collectionResponse[database.ListOpenReportsRow]{Items: items, Page: page})
 }
 

@@ -10,9 +10,15 @@ import (
 )
 
 type notificationResponse struct {
-	ID        string     `json:"id"`
-	Kind      string     `json:"kind"`
-	SubjectID string     `json:"subject_id"`
+	ID        string `json:"id"`
+	Kind      string `json:"kind"`
+	SubjectID string `json:"subject_id"`
+	// ApplicationID is the adoption an appointment, follow-up or application
+	// notification belongs to, so clients can link to it.
+	ApplicationID *string `json:"application_id"`
+	// Audience says on which side of the case the recipient is: "requester"
+	// (adopter, donor, surrender requester) or "organization".
+	Audience  string     `json:"audience" enum:"requester,organization"`
 	CreatedAt time.Time  `json:"created_at"`
 	ReadAt    *time.Time `json:"read_at"`
 }
@@ -72,7 +78,20 @@ func (s *Server) listNotifications(w http.ResponseWriter, r *http.Request) {
 	}
 	actor, _ := subjectUUID(r)
 	offset, size, page := pagination(r)
-	rows, err := s.pool.Query(r.Context(), "SELECT id::text,kind,subject_id::text,created_at,read_at FROM notifications WHERE user_id=$1 ORDER BY created_at DESC,id LIMIT $2 OFFSET $3", actor, size, offset)
+	rows, err := s.pool.Query(r.Context(), `SELECT n.id::text,n.kind,n.subject_id::text,ctx.application_id::text,
+ CASE WHEN ctx.requester_id=n.user_id OR ctx.requester_id IS NULL THEN 'requester' ELSE 'organization' END,
+ n.created_at,n.read_at
+FROM notifications n
+LEFT JOIN LATERAL (
+ SELECT a.id AS application_id,a.adopter_id AS requester_id FROM adoption_applications a WHERE n.kind='application' AND a.id=n.subject_id
+ UNION ALL SELECT a.id,a.adopter_id FROM appointments ap JOIN adoption_applications a ON a.id=ap.application_id WHERE n.kind='appointment' AND ap.id=n.subject_id
+ UNION ALL SELECT a.id,a.adopter_id FROM followup_tasks f JOIN adoption_applications a ON a.id=f.application_id WHERE n.kind IN ('followup','followup_due') AND f.id=n.subject_id
+ UNION ALL SELECT NULL::uuid,d.donor_id FROM donations d WHERE n.kind='donation' AND d.id=n.subject_id
+ UNION ALL SELECT NULL::uuid,s.requester_id FROM surrenders s WHERE n.kind='surrender' AND s.id=n.subject_id
+ UNION ALL SELECT NULL::uuid,c.counterparty_user_id FROM conversations c WHERE n.kind='message' AND c.id=n.subject_id
+ LIMIT 1
+) ctx ON true
+WHERE n.user_id=$1 ORDER BY n.created_at DESC,n.id LIMIT $2 OFFSET $3`, actor, size, offset)
 	if err != nil {
 		handleDBError(w, err)
 		return
@@ -81,7 +100,7 @@ func (s *Server) listNotifications(w http.ResponseWriter, r *http.Request) {
 	items := []notificationResponse{}
 	for rows.Next() {
 		var v notificationResponse
-		if err = rows.Scan(&v.ID, &v.Kind, &v.SubjectID, &v.CreatedAt, &v.ReadAt); err != nil {
+		if err = rows.Scan(&v.ID, &v.Kind, &v.SubjectID, &v.ApplicationID, &v.Audience, &v.CreatedAt, &v.ReadAt); err != nil {
 			handleDBError(w, err)
 			return
 		}
@@ -91,7 +110,11 @@ func (s *Server) listNotifications(w http.ResponseWriter, r *http.Request) {
 		handleDBError(w, err)
 		return
 	}
-	page.Total = len(items)
+	total, ok := s.countRows(w, r, `SELECT count(*) FROM notifications WHERE user_id=$1`, actor)
+	if !ok {
+		return
+	}
+	page.Total = total
 	writeJSON(w, 200, collectionResponse[notificationResponse]{Items: items, Page: page})
 }
 func (s *Server) notificationUnread(w http.ResponseWriter, r *http.Request) {
@@ -186,6 +209,12 @@ func (s *Server) markConversationRead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_, err = s.pool.Exec(r.Context(), `INSERT INTO conversation_reads(conversation_id,user_id,message_id,message_created_at) SELECT $1,$2,id,created_at FROM messages WHERE id=$3 AND conversation_id=$1 ON CONFLICT(conversation_id,user_id) DO UPDATE SET message_id=EXCLUDED.message_id,message_created_at=EXCLUDED.message_created_at,read_at=now() WHERE (EXCLUDED.message_created_at,EXCLUDED.message_id)>(conversation_reads.message_created_at,conversation_reads.message_id)`, v.ID, actor, id)
+	if err != nil {
+		handleDBError(w, err)
+		return
+	}
+	// Message notifications up to the read message are read as well.
+	_, err = s.pool.Exec(r.Context(), `UPDATE notifications SET read_at=now() WHERE user_id=$1 AND kind='message' AND subject_id=$2 AND read_at IS NULL AND created_at<=(SELECT created_at FROM messages WHERE id=$3)`, actor, v.ID, id)
 	if err != nil {
 		handleDBError(w, err)
 		return
@@ -316,7 +345,11 @@ func (s *Server) animalInterest(w http.ResponseWriter, r *http.Request) {
 		handleDBError(w, err)
 		return
 	}
-	result.Page.Total = len(result.People)
+	total, ok := s.countRows(w, r, `SELECT count(*) FROM animal_preferences p JOIN users u ON u.id=p.user_id WHERE p.animal_id=$1 AND p.preference='liked' AND u.deactivated_at IS NULL AND u.deleted_at IS NULL AND u.personal_profile->>'allow_organization_contact'='true'`, id)
+	if !ok {
+		return
+	}
+	result.Page.Total = total
 	writeJSON(w, 200, result)
 }
 func (s *Server) organizationAnalytics(w http.ResponseWriter, r *http.Request) {

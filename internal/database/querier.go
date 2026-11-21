@@ -22,6 +22,32 @@ type Querier interface {
 	CompleteAppointment(ctx context.Context, id pgtype.UUID) (Appointment, error)
 	ConsumeAppointmentOTP(ctx context.Context, id pgtype.UUID) (int64, error)
 	ConsumePasswordResetToken(ctx context.Context, id pgtype.UUID) (int64, error)
+	// ListAdopterApplications
+	CountAdopterApplications(ctx context.Context, arg CountAdopterApplicationsParams) (int32, error)
+	// ListAnimalsByOrganization
+	CountAnimalsByOrganization(ctx context.Context, arg CountAnimalsByOrganizationParams) (int32, error)
+	// ListAnimalsBySubmitter
+	CountAnimalsBySubmitter(ctx context.Context, submittedBy pgtype.UUID) (int32, error)
+	// ListAvailableAnimals
+	CountAvailableAnimals(ctx context.Context, arg CountAvailableAnimalsParams) (int32, error)
+	// ListMessagesBeforeCursor (all visible messages, independent of the cursor)
+	CountConversationMessages(ctx context.Context, arg CountConversationMessagesParams) (int32, error)
+	// ListMemberOrganizations
+	CountMemberOrganizations(ctx context.Context, userID pgtype.UUID) (int32, error)
+	// ListOpenReports
+	CountOpenReports(ctx context.Context, arg CountOpenReportsParams) (int32, error)
+	// Totals for paginated collections. Each query mirrors the filters of the
+	// list query named in its comment; keep them in sync.
+	// ListOrganizationApplications
+	CountOrganizationApplications(ctx context.Context, arg CountOrganizationApplicationsParams) (int32, error)
+	// ListOrganizationConversations
+	CountOrganizationConversations(ctx context.Context, arg CountOrganizationConversationsParams) (int32, error)
+	// ListPreferredAnimals
+	CountPreferredAnimals(ctx context.Context, arg CountPreferredAnimalsParams) (int32, error)
+	// ListUserConversations
+	CountUserConversations(ctx context.Context, userID pgtype.UUID) (int32, error)
+	// ListVerifiedOrganizations
+	CountVerifiedOrganizations(ctx context.Context, arg CountVerifiedOrganizationsParams) (int32, error)
 	CreateAdopterConversation(ctx context.Context, applicationID pgtype.UUID) (Conversation, error)
 	CreateAdoptionApplication(ctx context.Context, arg CreateAdoptionApplicationParams) (AdoptionApplication, error)
 	CreateAnimalOwnerConversation(ctx context.Context, animalID pgtype.UUID) (Conversation, error)

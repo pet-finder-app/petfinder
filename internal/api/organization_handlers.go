@@ -50,7 +50,12 @@ func (s *Server) listOrganizations(w http.ResponseWriter, r *http.Request) {
 	for _, item := range items {
 		views = append(views, organizationView(item, false))
 	}
-	page.Total = len(views)
+	total, err := s.queries.CountVerifiedOrganizations(r.Context(), database.CountVerifiedOrganizationsParams{StateCode: state, City: city})
+	if err != nil {
+		handleDBError(w, err)
+		return
+	}
+	page.Total = int(total)
 	writeJSON(w, http.StatusOK, collectionResponse[organizationResponse]{Items: views, Page: page})
 }
 

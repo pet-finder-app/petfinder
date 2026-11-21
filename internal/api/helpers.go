@@ -237,3 +237,14 @@ func decodePersonalProfile(data []byte) personalProfile {
 	_ = json.Unmarshal(data, &result)
 	return result
 }
+
+// countRows runs a COUNT query for a collection's total and writes the error
+// response itself when it fails.
+func (s *Server) countRows(w http.ResponseWriter, r *http.Request, query string, args ...any) (int, bool) {
+	var total int
+	if err := s.pool.QueryRow(r.Context(), query, args...).Scan(&total); err != nil {
+		handleDBError(w, err)
+		return 0, false
+	}
+	return total, true
+}

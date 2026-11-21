@@ -28,19 +28,21 @@ type donationRequest struct {
 	Note           string    `json:"note,omitempty" maxLength:"2000"`
 }
 type donationResponse struct {
-	ID             string    `json:"id"`
-	OrganizationID string    `json:"organization_id"`
-	DonorID        *string   `json:"donor_id"`
-	DonorName      *string   `json:"donor_name"`
-	AmountCents    int64     `json:"amount_cents"`
-	Currency       string    `json:"currency"`
-	TransferredAt  time.Time `json:"transferred_at"`
-	ReceiptMediaID *string   `json:"receipt_media_id"`
-	Anonymous      bool      `json:"anonymous"`
-	Note           string    `json:"note"`
-	Status         string    `json:"status"`
-	DecisionReason *string   `json:"decision_reason"`
-	CreatedAt      time.Time `json:"created_at"`
+	ID             string `json:"id"`
+	OrganizationID string `json:"organization_id"`
+	// OrganizationName lets donor histories render without organization lookups.
+	OrganizationName string    `json:"organization_name"`
+	DonorID          *string   `json:"donor_id"`
+	DonorName        *string   `json:"donor_name"`
+	AmountCents      int64     `json:"amount_cents"`
+	Currency         string    `json:"currency"`
+	TransferredAt    time.Time `json:"transferred_at"`
+	ReceiptMediaID   *string   `json:"receipt_media_id"`
+	Anonymous        bool      `json:"anonymous"`
+	Note             string    `json:"note"`
+	Status           string    `json:"status"`
+	DecisionReason   *string   `json:"decision_reason"`
+	CreatedAt        time.Time `json:"created_at"`
 }
 type donationDecision struct {
 	Status string `json:"status" enum:"confirmed,not_found"`
@@ -62,7 +64,7 @@ type donationDetail struct {
 	History  []donationHistoryRecord `json:"history"`
 }
 
-const donationProjection = `jsonb_build_object('id',d.id,'organization_id',d.organization_id,'donor_id',CASE WHEN NOT d.anonymous OR d.donor_id=$1 THEN d.donor_id END,'donor_name',CASE WHEN NOT d.anonymous OR d.donor_id=$1 THEN u.display_name END,'amount_cents',d.amount_cents,'currency',d.currency,'transferred_at',d.transferred_at,'receipt_media_id',d.receipt_media_id,'anonymous',d.anonymous,'note',d.note,'status',d.status,'decision_reason',d.decision_reason,'created_at',d.created_at)`
+const donationProjection = `jsonb_build_object('id',d.id,'organization_id',d.organization_id,'organization_name',(SELECT do2.display_name FROM organizations do2 WHERE do2.id=d.organization_id),'donor_id',CASE WHEN NOT d.anonymous OR d.donor_id=$1 THEN d.donor_id END,'donor_name',CASE WHEN NOT d.anonymous OR d.donor_id=$1 THEN u.display_name END,'amount_cents',d.amount_cents,'currency',d.currency,'transferred_at',d.transferred_at,'receipt_media_id',d.receipt_media_id,'anonymous',d.anonymous,'note',d.note,'status',d.status,'decision_reason',d.decision_reason,'created_at',d.created_at)`
 
 func registerDonationRoutes(s *Server, reg *routeRegistry) {
 	registerRoute[paymentDetails, paymentDetails](reg, "PUT", "/v1/organizations/{organizationId}/payment-details", "updatePaymentDetails", "Set direct-transfer payment instructions", "Donations", 200, s.protected(s.updatePaymentDetails), bearerAuth(false))
@@ -233,7 +235,11 @@ func (s *Server) listDonations(w http.ResponseWriter, r *http.Request) {
 		handleDBError(w, err)
 		return
 	}
-	page.Total = len(items)
+	total, ok := s.countRows(w, r, `SELECT count(*) FROM donations d WHERE (CASE WHEN $2::uuid IS NULL THEN d.donor_id=$1 ELSE d.organization_id=$2 END)`, actor, org)
+	if !ok {
+		return
+	}
+	page.Total = total
 	writeJSON(w, 200, collectionResponse[donationResponse]{Items: items, Page: page})
 }
 func (s *Server) donationScope(w http.ResponseWriter, r *http.Request) (pgtype.UUID, pgtype.UUID, pgtype.UUID, bool) {

@@ -94,7 +94,12 @@ func (s *Server) listAnimals(w http.ResponseWriter, r *http.Request) {
 		handleDBError(w, err)
 		return
 	}
-	page.Total = len(items)
+	total, err := s.queries.CountAvailableAnimals(r.Context(), database.CountAvailableAnimalsParams{Species: ptr("species"), Size: ptr("size"), StateCode: ptr("state"), City: ptr("city"), ViewerID: viewer})
+	if err != nil {
+		handleDBError(w, err)
+		return
+	}
+	page.Total = int(total)
 	writeJSON(w, http.StatusOK, collectionResponse[database.ListAvailableAnimalsRow]{Items: items, Page: page})
 }
 
@@ -447,7 +452,12 @@ func (s *Server) listPreferences(w http.ResponseWriter, r *http.Request) {
 		handleDBError(w, err)
 		return
 	}
-	page.Total = len(items)
+	total, err := s.queries.CountPreferredAnimals(r.Context(), database.CountPreferredAnimalsParams{UserID: actor, Preference: preference})
+	if err != nil {
+		handleDBError(w, err)
+		return
+	}
+	page.Total = int(total)
 	writeJSON(w, http.StatusOK, collectionResponse[database.ListPreferredAnimalsRow]{Items: items, Page: page})
 }
 

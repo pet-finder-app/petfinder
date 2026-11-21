@@ -37,30 +37,34 @@ type surrenderHistoryRecord struct {
 	Action    string         `json:"action"`
 	Notes     string         `json:"notes"`
 	ActorID   string         `json:"actor_id"`
+	ActorName string         `json:"actor_name"`
 	CreatedAt time.Time      `json:"created_at"`
 }
 type surrenderResponse struct {
-	ID             string                   `json:"id"`
-	OrganizationID string                   `json:"organization_id"`
-	RequesterID    string                   `json:"requester_id"`
-	Kind           string                   `json:"kind"`
-	AnimalID       *string                  `json:"animal_id"`
-	ApplicationID  *string                  `json:"application_id"`
-	Animal         animalRequest            `json:"animal"`
-	Reason         string                   `json:"reason"`
-	Documents      []string                 `json:"documents"`
-	Status         string                   `json:"status"`
-	ReviewReason   *string                  `json:"review_reason"`
-	CreatedAt      time.Time                `json:"created_at"`
-	UpdatedAt      time.Time                `json:"updated_at"`
-	DeliveredAt    *time.Time               `json:"delivered_at"`
-	ReceivedAt     *time.Time               `json:"received_at"`
-	CompletedAt    *time.Time               `json:"completed_at"`
-	AgreementID    *string                  `json:"agreement_id"`
-	History        []surrenderHistoryRecord `json:"history"`
+	ID             string `json:"id"`
+	OrganizationID string `json:"organization_id"`
+	// Display names of both parties; Go only shares surrenders with them.
+	OrganizationName string                   `json:"organization_name"`
+	RequesterID      string                   `json:"requester_id"`
+	RequesterName    string                   `json:"requester_name"`
+	Kind             string                   `json:"kind"`
+	AnimalID         *string                  `json:"animal_id"`
+	ApplicationID    *string                  `json:"application_id"`
+	Animal           animalRequest            `json:"animal"`
+	Reason           string                   `json:"reason"`
+	Documents        []string                 `json:"documents"`
+	Status           string                   `json:"status"`
+	ReviewReason     *string                  `json:"review_reason"`
+	CreatedAt        time.Time                `json:"created_at"`
+	UpdatedAt        time.Time                `json:"updated_at"`
+	DeliveredAt      *time.Time               `json:"delivered_at"`
+	ReceivedAt       *time.Time               `json:"received_at"`
+	CompletedAt      *time.Time               `json:"completed_at"`
+	AgreementID      *string                  `json:"agreement_id"`
+	History          []surrenderHistoryRecord `json:"history"`
 }
 
-const surrenderProjection = `jsonb_build_object('id',s.id,'organization_id',s.organization_id,'requester_id',s.requester_id,'kind',s.kind,'animal_id',s.animal_id,'application_id',s.application_id,'animal',s.animal_snapshot,'reason',s.reason,'documents',s.documents,'status',s.status,'review_reason',s.review_reason,'created_at',s.created_at,'updated_at',s.updated_at,'delivered_at',s.delivered_at,'received_at',s.received_at,'completed_at',s.completed_at,'agreement_id',(SELECT id FROM agreements WHERE surrender_id=s.id),'history',COALESCE((SELECT jsonb_agg(jsonb_build_object('action',h.action,'notes',h.notes,'actor_id',h.actor_id,'created_at',h.created_at,'snapshot',h.snapshot) ORDER BY h.id) FROM surrender_history h WHERE h.surrender_id=s.id),'[]'::jsonb))`
+const surrenderProjection = `jsonb_build_object('id',s.id,'organization_id',s.organization_id,'organization_name',(SELECT so.display_name FROM organizations so WHERE so.id=s.organization_id),'requester_id',s.requester_id,'requester_name',(SELECT su.display_name FROM users su WHERE su.id=s.requester_id),'kind',s.kind,'animal_id',s.animal_id,'application_id',s.application_id,'animal',s.animal_snapshot,'reason',s.reason,'documents',s.documents,'status',s.status,'review_reason',s.review_reason,'created_at',s.created_at,'updated_at',s.updated_at,'delivered_at',s.delivered_at,'received_at',s.received_at,'completed_at',s.completed_at,'agreement_id',(SELECT id FROM agreements WHERE surrender_id=s.id),'history',COALESCE((SELECT jsonb_agg(jsonb_build_object('action',h.action,'notes',h.notes,'actor_id',h.actor_id,'actor_name',(SELECT hu.display_name FROM users hu WHERE hu.id=h.actor_id),'created_at',h.created_at,'snapshot',h.snapshot) ORDER BY h.id) FROM surrender_history h WHERE h.surrender_id=s.id),'[]'::jsonb))`
 
 func registerSurrenderRoutes(s *Server, reg *routeRegistry) {
 	registerRoute[surrenderRequest, surrenderResponse](reg, "POST", "/v1/surrenders", "createSurrender", "Request organization intake or return of an adoption", "Surrenders", 201, s.protected(s.createSurrender), bearerAuth(false))
@@ -283,7 +287,11 @@ func (s *Server) listSurrenders(w http.ResponseWriter, r *http.Request) {
 		handleDBError(w, err)
 		return
 	}
-	page.Total = len(items)
+	total, ok := s.countRows(w, r, `SELECT count(*) FROM surrenders s WHERE CASE WHEN $2::uuid IS NULL THEN s.requester_id=$1 ELSE s.organization_id=$2 END`, actor, org)
+	if !ok {
+		return
+	}
+	page.Total = total
 	writeJSON(w, 200, collectionResponse[surrenderResponse]{Items: items, Page: page})
 }
 func (s *Server) resubmitSurrender(w http.ResponseWriter, r *http.Request) {

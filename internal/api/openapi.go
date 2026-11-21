@@ -225,7 +225,8 @@ type organizationIDQuery struct {
 }
 
 type applicationQuery struct {
-	Status string `json:"status,omitempty" enum:"submitted,screening,more_information_requested,approved,rejected,withdrawn,completed,cancelled"`
+	Status   string `json:"status,omitempty" enum:"submitted,screening,more_information_requested,approved,rejected,withdrawn,completed,cancelled"`
+	AnimalID string `json:"animal_id,omitempty" format:"uuid" doc:"Only applications for this animal (organization listings)."`
 }
 
 type messagePaginationQuery struct {

@@ -288,12 +288,14 @@ FROM adoption_applications aa
 JOIN animals a ON a.id = aa.animal_id
 JOIN organizations o ON o.id = aa.organization_id
 WHERE aa.adopter_id = $1
+  AND ($2::text IS NULL OR aa.status = $2)
 ORDER BY aa.created_at DESC, aa.id
-LIMIT $3::int OFFSET $2::int
+LIMIT $4::int OFFSET $3::int
 `
 
 type ListAdopterApplicationsParams struct {
 	AdopterID  pgtype.UUID `db:"adopter_id" json:"adopter_id"`
+	Status     *string     `db:"status" json:"status"`
 	PageOffset int32       `db:"page_offset" json:"page_offset"`
 	PageSize   int32       `db:"page_size" json:"page_size"`
 }
@@ -317,7 +319,12 @@ type ListAdopterApplicationsRow struct {
 }
 
 func (q *Queries) ListAdopterApplications(ctx context.Context, arg ListAdopterApplicationsParams) ([]ListAdopterApplicationsRow, error) {
-	rows, err := q.db.Query(ctx, listAdopterApplications, arg.AdopterID, arg.PageOffset, arg.PageSize)
+	rows, err := q.db.Query(ctx, listAdopterApplications,
+		arg.AdopterID,
+		arg.Status,
+		arg.PageOffset,
+		arg.PageSize,
+	)
 	if err != nil {
 		return nil, err
 	}
