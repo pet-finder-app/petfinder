@@ -244,7 +244,7 @@ type organizationResponse struct {
 	UpdatedAt          *time.Time                  `json:"updated_at"`
 	LegalName          *string                     `json:"legal_name,omitempty" doc:"Visible to authorized representatives and administrators."`
 	RegistrationNumber **string                    `json:"registration_number,omitempty"`
-	VerificationNotes  **string                    `json:"verification_notes,omitempty"`
+	VerificationNotes  **string                    `json:"verification_notes,omitempty" nullable:"true" doc:"Visible to authorized representatives and administrators."`
 }
 
 type officialChannelsResponse struct {

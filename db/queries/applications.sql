@@ -24,6 +24,7 @@ RETURNING *;
 -- name: GetAdoptionApplicationByID :one
 SELECT aa.*, a.name AS animal_name, a.status AS animal_status,
        u.display_name AS adopter_name, u.email AS adopter_email,
+       u.personal_verification_status AS adopter_verification_status,
        o.display_name AS organization_name
 FROM adoption_applications aa
 JOIN animals a ON a.id = aa.animal_id
@@ -32,7 +33,8 @@ JOIN organizations o ON o.id = aa.organization_id
 WHERE aa.id = sqlc.arg(id);
 
 -- name: ListOrganizationApplications :many
-SELECT aa.*, a.name AS animal_name, u.display_name AS adopter_name
+SELECT aa.*, a.name AS animal_name, u.display_name AS adopter_name,
+       u.personal_verification_status AS adopter_verification_status
 FROM adoption_applications aa
 JOIN animals a ON a.id = aa.animal_id
 JOIN users u ON u.id = aa.adopter_id

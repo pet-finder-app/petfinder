@@ -144,7 +144,7 @@ func (s *Server) submitVerification(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rollbackTransaction(r.Context(), tx)
 	var v verificationRecord
-	err = tx.QueryRow(r.Context(), `INSERT INTO verification_submissions(user_id,organization_id,evidence,submitted_by,target_snapshot) VALUES($1,$2,$3,$4,COALESCE((SELECT personal_profile FROM users WHERE id=$1),(SELECT jsonb_build_object('public_profile',public_profile,'private_profile',private_profile,'legal_name',legal_name,'registration_number',registration_number) FROM organizations WHERE id=$2))) RETURNING id::text,evidence,status,reason,submitted_by::text,reviewed_by::text,created_at,reviewed_at`, user, org, optionalJSON(&request), actor).Scan(&v.ID, &v.Evidence, &v.Status, &v.Reason, &v.SubmittedBy, &v.ReviewedBy, &v.CreatedAt, &v.ReviewedAt)
+	err = tx.QueryRow(r.Context(), `INSERT INTO verification_submissions(user_id,organization_id,evidence,submitted_by,target_snapshot) VALUES($1,$2,$3,$4,COALESCE((SELECT personal_profile FROM users WHERE id=$1),(SELECT jsonb_build_object('display_name',display_name,'pix_key',(SELECT pix_key FROM organization_payment_details WHERE organization_id=organizations.id),'public_profile',public_profile,'private_profile',private_profile,'legal_name',legal_name,'registration_number',registration_number) FROM organizations WHERE id=$2))) RETURNING id::text,evidence,status,reason,submitted_by::text,reviewed_by::text,created_at,reviewed_at`, user, org, optionalJSON(&request), actor).Scan(&v.ID, &v.Evidence, &v.Status, &v.Reason, &v.SubmittedBy, &v.ReviewedBy, &v.CreatedAt, &v.ReviewedAt)
 	if err != nil {
 		handleDBError(w, err)
 		return
@@ -194,7 +194,7 @@ func (s *Server) reviewVerification(w http.ResponseWriter, r *http.Request) {
 	}
 	if request.Decision == "approved" {
 		var unchanged bool
-		err = tx.QueryRow(r.Context(), `SELECT target_snapshot=COALESCE((SELECT personal_profile FROM users WHERE id=$2),(SELECT jsonb_build_object('public_profile',public_profile,'private_profile',private_profile,'legal_name',legal_name,'registration_number',registration_number) FROM organizations WHERE id=$3)) FROM verification_submissions WHERE id=$1`, id, user, org).Scan(&unchanged)
+		err = tx.QueryRow(r.Context(), `SELECT target_snapshot=COALESCE((SELECT personal_profile FROM users WHERE id=$2),(SELECT jsonb_build_object('display_name',display_name,'pix_key',(SELECT pix_key FROM organization_payment_details WHERE organization_id=organizations.id),'public_profile',public_profile,'private_profile',private_profile,'legal_name',legal_name,'registration_number',registration_number) FROM organizations WHERE id=$3)) FROM verification_submissions WHERE id=$1`, id, user, org).Scan(&unchanged)
 		if err != nil {
 			handleDBError(w, err)
 			return

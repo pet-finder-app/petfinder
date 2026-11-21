@@ -121,3 +121,46 @@ func TestSuspendedOrganizationCannotOperate(t *testing.T) {
 	s.owner.do(http.MethodPatch, "/v1/animals/"+s.animal.ID+"/status", map[string]any{"status": "available", "reason": "Republicação após verificação"}, http.StatusOK, nil)
 	s.owner.do(http.MethodPost, "/v1/applications/"+s.applicationID+"/decision", map[string]any{"decision": "approved", "reason": "Aprovação após verificação"}, http.StatusOK, nil)
 }
+
+// A verified organization that renames itself or changes its PIX key must be
+// verified again; first-time donation setup and other edits keep the status.
+func TestIdentityChangesRequireNewVerification(t *testing.T) {
+	owner, admin := registerUser(t), registerAdmin(t)
+	org := createOrganization(t, owner, "Cidade "+unique())
+	base := "/v1/organizations/" + org.ID
+	status := func() string {
+		var current organization
+		owner.do(http.MethodGet, base, nil, http.StatusOK, &current)
+		return current.VerificationStatus
+	}
+	verifyOrganization(t, admin, org.ID)
+
+	owner.do(http.MethodPatch, base, map[string]any{"description": "Nova descrição da organização, sem trocar o nome."}, http.StatusOK, nil)
+	owner.do(http.MethodPatch, base, map[string]any{"name": org.Name}, http.StatusOK, nil)
+	pix := map[string]any{"method": "pix", "instructions": "Doe pelo PIX da ONG", "pix_key": "doacoes@example.com", "account_holder": "Associação Protetora", "published": true}
+	owner.do(http.MethodPut, base+"/payment-details", pix, http.StatusOK, nil)
+	pix["instructions"] = "Instruções revisadas"
+	pix["pix_key"] = "  doacoes@example.com  "
+	owner.do(http.MethodPut, base+"/payment-details", pix, http.StatusOK, nil)
+	if got := status(); got != "verified" {
+		t.Fatalf("status after unrelated edits = %q, want verified", got)
+	}
+
+	owner.do(http.MethodPatch, base, map[string]any{"name": "Outro Nome " + unique()}, http.StatusOK, nil)
+	if got := status(); got != "pending" {
+		t.Fatalf("status after rename = %q, want pending", got)
+	}
+
+	verifyOrganization(t, admin, org.ID)
+	pix["pix_key"] = "outra-chave@example.com"
+	owner.do(http.MethodPut, base+"/payment-details", pix, http.StatusOK, nil)
+	if got := status(); got != "pending" {
+		t.Fatalf("status after PIX change = %q, want pending", got)
+	}
+
+	// Evidence reviewed before a rename cannot approve the new name.
+	var v struct{ ID string }
+	owner.do(http.MethodPost, base+"/verification-submissions", map[string]any{"documents": []string{"https://example.com/registro.pdf"}}, http.StatusCreated, &v)
+	owner.do(http.MethodPatch, base, map[string]any{"name": "Nome Durante Análise " + unique()}, http.StatusOK, nil)
+	admin.do(http.MethodPost, "/v1/verifications/"+v.ID+"/decision", map[string]any{"decision": "approved", "reason": "Documentos de antes da troca"}, http.StatusConflict, nil)
+}

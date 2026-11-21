@@ -122,6 +122,7 @@ type Querier interface {
 	TouchRefreshSession(ctx context.Context, id pgtype.UUID) (int64, error)
 	UpdateAnimalDetails(ctx context.Context, arg UpdateAnimalDetailsParams) (Animal, error)
 	UpdateOrganizationMemberPermissions(ctx context.Context, arg UpdateOrganizationMemberPermissionsParams) (OrganizationMember, error)
+	// changes must be verified again; other statuses only change through review.
 	UpdateOrganizationProfile(ctx context.Context, arg UpdateOrganizationProfileParams) (Organization, error)
 	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) (int64, error)
 	UpdateUserProfile(ctx context.Context, arg UpdateUserProfileParams) (User, error)

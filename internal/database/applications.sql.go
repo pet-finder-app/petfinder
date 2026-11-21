@@ -195,6 +195,7 @@ func (q *Queries) CreatePostAdoptionFollowup(ctx context.Context, arg CreatePost
 const getAdoptionApplicationByID = `-- name: GetAdoptionApplicationByID :one
 SELECT aa.id, aa.animal_id, aa.adopter_id, aa.organization_id, aa.status, aa.applicant_message, aa.decision_reason, aa.decided_by, aa.decided_at, aa.withdrawn_at, aa.completed_at, aa.created_at, aa.updated_at, a.name AS animal_name, a.status AS animal_status,
        u.display_name AS adopter_name, u.email AS adopter_email,
+       u.personal_verification_status AS adopter_verification_status,
        o.display_name AS organization_name
 FROM adoption_applications aa
 JOIN animals a ON a.id = aa.animal_id
@@ -204,24 +205,25 @@ WHERE aa.id = $1
 `
 
 type GetAdoptionApplicationByIDRow struct {
-	ID               pgtype.UUID        `db:"id" json:"id"`
-	AnimalID         pgtype.UUID        `db:"animal_id" json:"animal_id"`
-	AdopterID        pgtype.UUID        `db:"adopter_id" json:"adopter_id"`
-	OrganizationID   pgtype.UUID        `db:"organization_id" json:"organization_id"`
-	Status           string             `db:"status" json:"status"`
-	ApplicantMessage string             `db:"applicant_message" json:"applicant_message"`
-	DecisionReason   *string            `db:"decision_reason" json:"decision_reason"`
-	DecidedBy        pgtype.UUID        `db:"decided_by" json:"decided_by"`
-	DecidedAt        pgtype.Timestamptz `db:"decided_at" json:"decided_at"`
-	WithdrawnAt      pgtype.Timestamptz `db:"withdrawn_at" json:"withdrawn_at"`
-	CompletedAt      pgtype.Timestamptz `db:"completed_at" json:"completed_at"`
-	CreatedAt        pgtype.Timestamptz `db:"created_at" json:"created_at"`
-	UpdatedAt        pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
-	AnimalName       string             `db:"animal_name" json:"animal_name"`
-	AnimalStatus     string             `db:"animal_status" json:"animal_status"`
-	AdopterName      string             `db:"adopter_name" json:"adopter_name"`
-	AdopterEmail     string             `db:"adopter_email" json:"adopter_email"`
-	OrganizationName string             `db:"organization_name" json:"organization_name"`
+	ID                        pgtype.UUID        `db:"id" json:"id"`
+	AnimalID                  pgtype.UUID        `db:"animal_id" json:"animal_id"`
+	AdopterID                 pgtype.UUID        `db:"adopter_id" json:"adopter_id"`
+	OrganizationID            pgtype.UUID        `db:"organization_id" json:"organization_id"`
+	Status                    string             `db:"status" json:"status"`
+	ApplicantMessage          string             `db:"applicant_message" json:"applicant_message"`
+	DecisionReason            *string            `db:"decision_reason" json:"decision_reason"`
+	DecidedBy                 pgtype.UUID        `db:"decided_by" json:"decided_by"`
+	DecidedAt                 pgtype.Timestamptz `db:"decided_at" json:"decided_at"`
+	WithdrawnAt               pgtype.Timestamptz `db:"withdrawn_at" json:"withdrawn_at"`
+	CompletedAt               pgtype.Timestamptz `db:"completed_at" json:"completed_at"`
+	CreatedAt                 pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	UpdatedAt                 pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
+	AnimalName                string             `db:"animal_name" json:"animal_name"`
+	AnimalStatus              string             `db:"animal_status" json:"animal_status"`
+	AdopterName               string             `db:"adopter_name" json:"adopter_name"`
+	AdopterEmail              string             `db:"adopter_email" json:"adopter_email"`
+	AdopterVerificationStatus string             `db:"adopter_verification_status" json:"adopter_verification_status"`
+	OrganizationName          string             `db:"organization_name" json:"organization_name"`
 }
 
 func (q *Queries) GetAdoptionApplicationByID(ctx context.Context, id pgtype.UUID) (GetAdoptionApplicationByIDRow, error) {
@@ -245,6 +247,7 @@ func (q *Queries) GetAdoptionApplicationByID(ctx context.Context, id pgtype.UUID
 		&i.AnimalStatus,
 		&i.AdopterName,
 		&i.AdopterEmail,
+		&i.AdopterVerificationStatus,
 		&i.OrganizationName,
 	)
 	return i, err
@@ -384,7 +387,8 @@ func (q *Queries) ListApplicationStatusHistory(ctx context.Context, applicationI
 }
 
 const listOrganizationApplications = `-- name: ListOrganizationApplications :many
-SELECT aa.id, aa.animal_id, aa.adopter_id, aa.organization_id, aa.status, aa.applicant_message, aa.decision_reason, aa.decided_by, aa.decided_at, aa.withdrawn_at, aa.completed_at, aa.created_at, aa.updated_at, a.name AS animal_name, u.display_name AS adopter_name
+SELECT aa.id, aa.animal_id, aa.adopter_id, aa.organization_id, aa.status, aa.applicant_message, aa.decision_reason, aa.decided_by, aa.decided_at, aa.withdrawn_at, aa.completed_at, aa.created_at, aa.updated_at, a.name AS animal_name, u.display_name AS adopter_name,
+       u.personal_verification_status AS adopter_verification_status
 FROM adoption_applications aa
 JOIN animals a ON a.id = aa.animal_id
 JOIN users u ON u.id = aa.adopter_id
@@ -404,21 +408,22 @@ type ListOrganizationApplicationsParams struct {
 }
 
 type ListOrganizationApplicationsRow struct {
-	ID               pgtype.UUID        `db:"id" json:"id"`
-	AnimalID         pgtype.UUID        `db:"animal_id" json:"animal_id"`
-	AdopterID        pgtype.UUID        `db:"adopter_id" json:"adopter_id"`
-	OrganizationID   pgtype.UUID        `db:"organization_id" json:"organization_id"`
-	Status           string             `db:"status" json:"status"`
-	ApplicantMessage string             `db:"applicant_message" json:"applicant_message"`
-	DecisionReason   *string            `db:"decision_reason" json:"decision_reason"`
-	DecidedBy        pgtype.UUID        `db:"decided_by" json:"decided_by"`
-	DecidedAt        pgtype.Timestamptz `db:"decided_at" json:"decided_at"`
-	WithdrawnAt      pgtype.Timestamptz `db:"withdrawn_at" json:"withdrawn_at"`
-	CompletedAt      pgtype.Timestamptz `db:"completed_at" json:"completed_at"`
-	CreatedAt        pgtype.Timestamptz `db:"created_at" json:"created_at"`
-	UpdatedAt        pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
-	AnimalName       string             `db:"animal_name" json:"animal_name"`
-	AdopterName      string             `db:"adopter_name" json:"adopter_name"`
+	ID                        pgtype.UUID        `db:"id" json:"id"`
+	AnimalID                  pgtype.UUID        `db:"animal_id" json:"animal_id"`
+	AdopterID                 pgtype.UUID        `db:"adopter_id" json:"adopter_id"`
+	OrganizationID            pgtype.UUID        `db:"organization_id" json:"organization_id"`
+	Status                    string             `db:"status" json:"status"`
+	ApplicantMessage          string             `db:"applicant_message" json:"applicant_message"`
+	DecisionReason            *string            `db:"decision_reason" json:"decision_reason"`
+	DecidedBy                 pgtype.UUID        `db:"decided_by" json:"decided_by"`
+	DecidedAt                 pgtype.Timestamptz `db:"decided_at" json:"decided_at"`
+	WithdrawnAt               pgtype.Timestamptz `db:"withdrawn_at" json:"withdrawn_at"`
+	CompletedAt               pgtype.Timestamptz `db:"completed_at" json:"completed_at"`
+	CreatedAt                 pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	UpdatedAt                 pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
+	AnimalName                string             `db:"animal_name" json:"animal_name"`
+	AdopterName               string             `db:"adopter_name" json:"adopter_name"`
+	AdopterVerificationStatus string             `db:"adopter_verification_status" json:"adopter_verification_status"`
 }
 
 func (q *Queries) ListOrganizationApplications(ctx context.Context, arg ListOrganizationApplicationsParams) ([]ListOrganizationApplicationsRow, error) {
@@ -452,6 +457,7 @@ func (q *Queries) ListOrganizationApplications(ctx context.Context, arg ListOrga
 			&i.UpdatedAt,
 			&i.AnimalName,
 			&i.AdopterName,
+			&i.AdopterVerificationStatus,
 		); err != nil {
 			return nil, err
 		}

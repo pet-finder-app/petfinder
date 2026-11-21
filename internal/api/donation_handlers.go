@@ -1,10 +1,12 @@
 package api
 
 import (
+	"errors"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -93,9 +95,45 @@ func (s *Server) updatePaymentDetails(w http.ResponseWriter, r *http.Request) {
 		writeServiceError(w, ErrInvalid)
 		return
 	}
+	if req.PixKey != nil {
+		trimmed := strings.TrimSpace(*req.PixKey)
+		req.PixKey = &trimmed
+		if trimmed == "" {
+			req.PixKey = nil
+		}
+	}
 	actor, _ := subjectUUID(r)
-	_, err := s.pool.Exec(r.Context(), `INSERT INTO organization_payment_details(organization_id,method,instructions,pix_key,bank_name,bank_branch,bank_account,account_holder,published,updated_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT(organization_id) DO UPDATE SET method=EXCLUDED.method,instructions=EXCLUDED.instructions,pix_key=EXCLUDED.pix_key,bank_name=EXCLUDED.bank_name,bank_branch=EXCLUDED.bank_branch,bank_account=EXCLUDED.bank_account,account_holder=EXCLUDED.account_holder,published=EXCLUDED.published,updated_by=EXCLUDED.updated_by,updated_at=now()`, org, req.Method, req.Instructions, req.PixKey, req.BankName, req.BankBranch, req.BankAccount, req.AccountHolder, req.Published, actor)
+	tx, err := s.pool.Begin(r.Context())
 	if err != nil {
+		handleDBError(w, err)
+		return
+	}
+	defer rollbackTransaction(r.Context(), tx)
+	if _, err = tx.Exec(r.Context(), "SELECT id FROM organizations WHERE id=$1 FOR UPDATE", org); err != nil {
+		handleDBError(w, err)
+		return
+	}
+	// Once donation details exist, any change of the PIX key (clearing it or
+	// switching methods included) sends a verified organization back to review:
+	// donors trust the key because the organization was verified.
+	var configured, changed bool
+	err = tx.QueryRow(r.Context(), `SELECT true, pix_key IS DISTINCT FROM $2::text FROM organization_payment_details WHERE organization_id=$1`, org, req.PixKey).Scan(&configured, &changed)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		handleDBError(w, err)
+		return
+	}
+	_, err = tx.Exec(r.Context(), `INSERT INTO organization_payment_details(organization_id,method,instructions,pix_key,bank_name,bank_branch,bank_account,account_holder,published,updated_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT(organization_id) DO UPDATE SET method=EXCLUDED.method,instructions=EXCLUDED.instructions,pix_key=EXCLUDED.pix_key,bank_name=EXCLUDED.bank_name,bank_branch=EXCLUDED.bank_branch,bank_account=EXCLUDED.bank_account,account_holder=EXCLUDED.account_holder,published=EXCLUDED.published,updated_by=EXCLUDED.updated_by,updated_at=now()`, org, req.Method, req.Instructions, req.PixKey, req.BankName, req.BankBranch, req.BankAccount, req.AccountHolder, req.Published, actor)
+	if err != nil {
+		handleDBError(w, err)
+		return
+	}
+	if configured && changed {
+		if _, err = tx.Exec(r.Context(), "UPDATE organizations SET verification_status='pending' WHERE id=$1 AND verification_status='verified'", org); err != nil {
+			handleDBError(w, err)
+			return
+		}
+	}
+	if err = tx.Commit(r.Context()); err != nil {
 		handleDBError(w, err)
 		return
 	}

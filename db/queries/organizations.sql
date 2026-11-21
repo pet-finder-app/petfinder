@@ -39,7 +39,12 @@ UPDATE organizations
 SET slug = COALESCE(sqlc.narg(slug)::citext, slug),
  public_profile = COALESCE(sqlc.narg(public_profile)::jsonb, public_profile),
  private_profile = COALESCE(sqlc.narg(private_profile)::jsonb, private_profile),
- verification_status=CASE WHEN sqlc.narg(private_profile)::jsonb IS NOT NULL THEN 'pending' ELSE verification_status END,
+ -- A verified organization whose private evidence or public name actually
+-- changes must be verified again; other statuses only change through review.
+verification_status=CASE
+    WHEN verification_status = 'verified' AND sqlc.narg(private_profile)::jsonb IS NOT NULL AND private_profile IS DISTINCT FROM sqlc.narg(private_profile)::jsonb THEN 'pending'
+    WHEN verification_status = 'verified' AND display_name IS DISTINCT FROM sqlc.arg(display_name) THEN 'pending'
+    ELSE verification_status END,
  display_name = sqlc.arg(display_name),
     description = sqlc.arg(description),
     official_email = sqlc.arg(official_email),

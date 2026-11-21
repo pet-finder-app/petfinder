@@ -741,7 +741,11 @@ UPDATE organizations
 SET slug = COALESCE($1::citext, slug),
  public_profile = COALESCE($2::jsonb, public_profile),
  private_profile = COALESCE($3::jsonb, private_profile),
- verification_status=CASE WHEN $3::jsonb IS NOT NULL THEN 'pending' ELSE verification_status END,
+ -- A verified organization whose private evidence or public name actually
+verification_status=CASE
+    WHEN verification_status = 'verified' AND $3::jsonb IS NOT NULL AND private_profile IS DISTINCT FROM $3::jsonb THEN 'pending'
+    WHEN verification_status = 'verified' AND display_name IS DISTINCT FROM $4 THEN 'pending'
+    ELSE verification_status END,
  display_name = $4,
     description = $5,
     official_email = $6,
@@ -773,6 +777,7 @@ type UpdateOrganizationProfileParams struct {
 	ID             pgtype.UUID    `db:"id" json:"id"`
 }
 
+// changes must be verified again; other statuses only change through review.
 func (q *Queries) UpdateOrganizationProfile(ctx context.Context, arg UpdateOrganizationProfileParams) (Organization, error) {
 	row := q.db.QueryRow(ctx, updateOrganizationProfile,
 		arg.Slug,

@@ -304,7 +304,8 @@ func (q *Queries) UpdateUserPassword(ctx context.Context, arg UpdateUserPassword
 const updateUserProfile = `-- name: UpdateUserProfile :one
 UPDATE users
 SET personal_profile = COALESCE($1::jsonb, personal_profile),
- personal_verification_status = CASE WHEN $1::jsonb IS NOT NULL THEN 'unverified' ELSE personal_verification_status END,
+ -- Only an actual identity change invalidates the previous verification.
+ personal_verification_status = CASE WHEN $1::jsonb IS NOT NULL AND personal_profile IS DISTINCT FROM $1::jsonb THEN 'unverified' ELSE personal_verification_status END,
  display_name = $2,
     phone = $3,
     city = $4,
