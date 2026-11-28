@@ -72,6 +72,30 @@ func TestApplicationRequiresLike(t *testing.T) {
 	adopter.do(http.MethodPost, "/v1/applications", application, http.StatusConflict, nil)
 }
 
+func TestDiscoveryFiltersByOrganization(t *testing.T) {
+	first, second, anonymous := registerUser(t), registerUser(t), client{t: t}
+	admin := registerAdmin(t)
+	city := "Cidade " + unique()
+	firstOrg, secondOrg := createOrganization(t, first, city), createOrganization(t, second, city)
+	verifyOrganization(t, admin, firstOrg.ID)
+	verifyOrganization(t, admin, secondOrg.ID)
+	var a animal
+	first.do(http.MethodPost, "/v1/animals", animalRequest(firstOrg.ID, city), http.StatusCreated, &a)
+	second.do(http.MethodPost, "/v1/animals", animalRequest(secondOrg.ID, city), http.StatusCreated, nil)
+
+	var page struct {
+		Items []animal `json:"items"`
+		Page  struct {
+			Total int `json:"total"`
+		} `json:"page"`
+	}
+	anonymous.do(http.MethodGet, "/v1/animals?city="+url.QueryEscape(city)+"&organization_id="+firstOrg.ID, nil, http.StatusOK, &page)
+	if len(page.Items) != 1 || page.Items[0].ID != a.ID || page.Page.Total != 1 {
+		t.Fatalf("organization filter returned %+v (total %d)", page.Items, page.Page.Total)
+	}
+	anonymous.do(http.MethodGet, "/v1/animals?organization_id=invalid", nil, http.StatusUnprocessableEntity, nil)
+}
+
 type applicationDetail struct {
 	Application struct {
 		Status string `json:"status"`

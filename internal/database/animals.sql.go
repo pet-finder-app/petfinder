@@ -665,14 +665,15 @@ WHERE a.status = 'available'
   AND ($4::text IS NULL OR a.size = $4)
   AND ($5::text IS NULL OR a.state_code = $5)
   AND ($6::text IS NULL OR a.city = $6)
+  AND ($7::uuid IS NULL OR a.responsible_organization_id = $7)
   AND NOT EXISTS (
       SELECT 1 FROM animal_preferences p
-      WHERE p.user_id = $7
+      WHERE p.user_id = $8
         AND p.animal_id = a.id
         AND p.preference = 'not_interested'
   )
 ORDER BY distance_score ASC NULLS LAST, a.published_at DESC, a.id
-LIMIT $9::int OFFSET $8::int
+LIMIT $10::int OFFSET $9::int
 `
 
 type ListAvailableAnimalsParams struct {
@@ -682,6 +683,7 @@ type ListAvailableAnimalsParams struct {
 	Size            *string        `db:"size" json:"size"`
 	StateCode       *string        `db:"state_code" json:"state_code"`
 	City            *string        `db:"city" json:"city"`
+	OrganizationID  pgtype.UUID    `db:"organization_id" json:"organization_id"`
 	ViewerID        pgtype.UUID    `db:"viewer_id" json:"viewer_id"`
 	PageOffset      int32          `db:"page_offset" json:"page_offset"`
 	PageSize        int32          `db:"page_size" json:"page_size"`
@@ -735,6 +737,7 @@ func (q *Queries) ListAvailableAnimals(ctx context.Context, arg ListAvailableAni
 		arg.Size,
 		arg.StateCode,
 		arg.City,
+		arg.OrganizationID,
 		arg.ViewerID,
 		arg.PageOffset,
 		arg.PageSize,

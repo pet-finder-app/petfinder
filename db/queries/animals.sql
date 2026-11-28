@@ -61,6 +61,7 @@ WHERE a.status = 'available'
   AND (sqlc.narg(size)::text IS NULL OR a.size = sqlc.narg(size))
   AND (sqlc.narg(state_code)::text IS NULL OR a.state_code = sqlc.narg(state_code))
   AND (sqlc.narg(city)::text IS NULL OR a.city = sqlc.narg(city))
+  AND (sqlc.narg(organization_id)::uuid IS NULL OR a.responsible_organization_id = sqlc.narg(organization_id))
   AND NOT EXISTS (
       SELECT 1 FROM animal_preferences p
       WHERE p.user_id = sqlc.narg(viewer_id)

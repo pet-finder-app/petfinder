@@ -214,6 +214,8 @@ type animalQuery struct {
 	City      string  `json:"city,omitempty"`
 	Latitude  float64 `json:"latitude,omitempty" minimum:"-90" maximum:"90"`
 	Longitude float64 `json:"longitude,omitempty" minimum:"-180" maximum:"180"`
+	// Public: limits discovery to one organization's available animals.
+	OrganizationID string `json:"organization_id,omitempty" format:"uuid" doc:"Only available animals this organization is responsible for."`
 }
 
 type preferenceQuery struct {

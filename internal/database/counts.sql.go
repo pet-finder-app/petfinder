@@ -74,20 +74,22 @@ WHERE a.status = 'available'
   AND ($2::text IS NULL OR a.size = $2)
   AND ($3::text IS NULL OR a.state_code = $3)
   AND ($4::text IS NULL OR a.city = $4)
+  AND ($5::uuid IS NULL OR a.responsible_organization_id = $5)
   AND NOT EXISTS (
       SELECT 1 FROM animal_preferences p
-      WHERE p.user_id = $5
+      WHERE p.user_id = $6
         AND p.animal_id = a.id
         AND p.preference = 'not_interested'
   )
 `
 
 type CountAvailableAnimalsParams struct {
-	Species   *string     `db:"species" json:"species"`
-	Size      *string     `db:"size" json:"size"`
-	StateCode *string     `db:"state_code" json:"state_code"`
-	City      *string     `db:"city" json:"city"`
-	ViewerID  pgtype.UUID `db:"viewer_id" json:"viewer_id"`
+	Species        *string     `db:"species" json:"species"`
+	Size           *string     `db:"size" json:"size"`
+	StateCode      *string     `db:"state_code" json:"state_code"`
+	City           *string     `db:"city" json:"city"`
+	OrganizationID pgtype.UUID `db:"organization_id" json:"organization_id"`
+	ViewerID       pgtype.UUID `db:"viewer_id" json:"viewer_id"`
 }
 
 // ListAvailableAnimals
@@ -97,6 +99,7 @@ func (q *Queries) CountAvailableAnimals(ctx context.Context, arg CountAvailableA
 		arg.Size,
 		arg.StateCode,
 		arg.City,
+		arg.OrganizationID,
 		arg.ViewerID,
 	)
 	var column_1 int32

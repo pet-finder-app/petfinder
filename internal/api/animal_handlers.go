@@ -85,16 +85,25 @@ func (s *Server) listAnimals(w http.ResponseWriter, r *http.Request) {
 	if query.Get("latitude") != "" && query.Get("longitude") != "" {
 		lat, lng = &latValue, &lngValue
 	}
+	var organizationID pgtype.UUID
+	if value := strings.TrimSpace(query.Get("organization_id")); value != "" {
+		parsed, valid := pathUUIDValue(value)
+		if !valid {
+			writeProblem(w, http.StatusUnprocessableEntity, "Validation failed", "invalid organization_id", nil)
+			return
+		}
+		organizationID = parsed
+	}
 	viewer, _ := subjectUUID(r)
 	items, err := s.queries.ListAvailableAnimals(r.Context(), database.ListAvailableAnimalsParams{
 		ViewerLatitude: numeric(lat), ViewerLongitude: numeric(lng), Species: ptr("species"), Size: ptr("size"),
-		StateCode: ptr("state"), City: ptr("city"), ViewerID: viewer, PageOffset: offset, PageSize: size,
+		StateCode: ptr("state"), City: ptr("city"), OrganizationID: organizationID, ViewerID: viewer, PageOffset: offset, PageSize: size,
 	})
 	if err != nil {
 		handleDBError(w, err)
 		return
 	}
-	total, err := s.queries.CountAvailableAnimals(r.Context(), database.CountAvailableAnimalsParams{Species: ptr("species"), Size: ptr("size"), StateCode: ptr("state"), City: ptr("city"), ViewerID: viewer})
+	total, err := s.queries.CountAvailableAnimals(r.Context(), database.CountAvailableAnimalsParams{Species: ptr("species"), Size: ptr("size"), StateCode: ptr("state"), City: ptr("city"), OrganizationID: organizationID, ViewerID: viewer})
 	if err != nil {
 		handleDBError(w, err)
 		return
