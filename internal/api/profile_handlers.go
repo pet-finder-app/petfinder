@@ -233,7 +233,10 @@ func (s *Server) reviewVerification(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, v)
 }
 
-const verificationReviewProjection = `jsonb_build_object('verification',jsonb_build_object('id',v.id,'evidence',v.evidence,'status',v.status,'reason',v.reason,'submitted_by',v.submitted_by,'reviewed_by',v.reviewed_by,'created_at',v.created_at,'reviewed_at',v.reviewed_at),'user_id',v.user_id,'organization_id',v.organization_id,'profile',v.target_snapshot)`
+const verificationReviewProjection = `jsonb_build_object('verification',jsonb_build_object('id',v.id,'evidence',v.evidence,'status',v.status,'reason',v.reason,'submitted_by',v.submitted_by,'reviewed_by',v.reviewed_by,'created_at',v.created_at,'reviewed_at',v.reviewed_at),'user_id',v.user_id,'organization_id',v.organization_id,` +
+	`'display_name',COALESCE((SELECT o.display_name FROM organizations o WHERE o.id=v.organization_id),(SELECT u.display_name FROM users u WHERE u.id=v.user_id),''),` +
+	`'documents',COALESCE((SELECT jsonb_agg(jsonb_build_object('url',d.url,'filename',m.filename,'content_type',m.content_type,'byte_size',m.byte_size) ORDER BY d.ord) FROM jsonb_array_elements_text(CASE WHEN jsonb_typeof(v.evidence->'documents')='array' THEN v.evidence->'documents' ELSE '[]'::jsonb END) WITH ORDINALITY d(url,ord) LEFT JOIN media_uploads m ON m.uploaded_at IS NOT NULL AND m.id=substring(d.url FROM '/v1/media/([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$')::uuid),'[]'::jsonb),` +
+	`'profile',v.target_snapshot)`
 
 func (s *Server) verificationRequirements(w http.ResponseWriter, r *http.Request) {
 	_, org, ok := s.verificationScope(w, r)

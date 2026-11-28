@@ -23,7 +23,21 @@ func TestProfileAndVerification(t *testing.T) {
 	u.do("GET", "/v1/me/verification/requirements", nil, 200, nil)
 	stranger.do("GET", "/v1/verifications", nil, 403, nil)
 	admin.do("GET", "/v1/verifications", nil, 200, nil)
-	admin.do("GET", "/v1/verifications/"+v.ID, nil, 200, nil)
+	var review struct {
+		DisplayName string `json:"display_name"`
+		Documents   []struct {
+			URL      string `json:"url"`
+			ByteSize *int64 `json:"byte_size"`
+		} `json:"documents"`
+	}
+	admin.do("GET", "/v1/verifications/"+v.ID, nil, 200, &review)
+	if review.DisplayName == "" || len(review.Documents) == 0 {
+		t.Fatalf("review lacks the display name or documents: %+v", review)
+	}
+	// External evidence URLs carry no Go file details.
+	if review.Documents[0].ByteSize != nil {
+		t.Fatalf("external document reported a size: %+v", review.Documents[0])
+	}
 	stranger.do("POST", "/v1/verifications/"+v.ID+"/decision", map[string]any{"decision": "approved", "reason": "Identity checked"}, 403, nil)
 	admin.do("POST", "/v1/verifications/"+v.ID+"/decision", map[string]any{"decision": "under_review", "reason": "Checking documents"}, 200, nil)
 	admin.do("POST", "/v1/verifications/"+v.ID+"/decision", map[string]any{"decision": "approved", "reason": "Identity checked"}, 200, nil)

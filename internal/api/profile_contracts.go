@@ -68,11 +68,23 @@ type verificationRequirements struct {
 	RequiredDocuments []string `json:"required_documents"`
 	MaximumDocuments  int      `json:"maximum_documents"`
 }
+
+// verificationDocument describes one evidence URL; file fields are null when
+// the URL does not point to an uploaded Go media file.
+type verificationDocument struct {
+	URL         string  `json:"url"`
+	Filename    *string `json:"filename"`
+	ContentType *string `json:"content_type"`
+	ByteSize    *int64  `json:"byte_size"`
+}
 type verificationReviewItem struct {
 	Verification   verificationRecord `json:"verification"`
 	UserID         *string            `json:"user_id"`
 	OrganizationID *string            `json:"organization_id"`
-	Profile        json.RawMessage    `json:"profile"`
+	// DisplayName is the current name of the person or organization under review.
+	DisplayName string                 `json:"display_name"`
+	Documents   []verificationDocument `json:"documents" doc:"Evidence documents in submission order, with their file details."`
+	Profile     json.RawMessage        `json:"profile"`
 }
 type verificationStatusQuery struct {
 	Status string `json:"status,omitempty" enum:"submitted,under_review,approved,rejected" doc:"Omit to list every submission."`
