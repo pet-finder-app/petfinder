@@ -255,7 +255,7 @@ func (s *Server) verificationQueue(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	offset, size, page := pagination(r)
-	rows, err := s.pool.Query(r.Context(), `SELECT `+verificationReviewProjection+` FROM verification_submissions v WHERE CASE WHEN $1='' THEN status IN ('submitted','under_review') ELSE status=$1 END ORDER BY created_at,id LIMIT $2 OFFSET $3`, status, size, offset)
+	rows, err := s.pool.Query(r.Context(), `SELECT `+verificationReviewProjection+` FROM verification_submissions v WHERE ($1='' OR status=$1) ORDER BY created_at,id LIMIT $2 OFFSET $3`, status, size, offset)
 	if err != nil {
 		handleDBError(w, err)
 		return
@@ -274,7 +274,7 @@ func (s *Server) verificationQueue(w http.ResponseWriter, r *http.Request) {
 		handleDBError(w, err)
 		return
 	}
-	total, ok := s.countRows(w, r, `SELECT count(*) FROM verification_submissions WHERE CASE WHEN $1='' THEN status IN ('submitted','under_review') ELSE status=$1 END`, status)
+	total, ok := s.countRows(w, r, `SELECT count(*) FROM verification_submissions WHERE ($1='' OR status=$1)`, status)
 	if !ok {
 		return
 	}

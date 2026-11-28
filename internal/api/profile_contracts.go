@@ -75,5 +75,5 @@ type verificationReviewItem struct {
 	Profile        json.RawMessage    `json:"profile"`
 }
 type verificationStatusQuery struct {
-	Status string `json:"status,omitempty" enum:"submitted,under_review,approved,rejected"`
+	Status string `json:"status,omitempty" enum:"submitted,under_review,approved,rejected" doc:"Omit to list every submission."`
 }

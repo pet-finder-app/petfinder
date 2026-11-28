@@ -51,8 +51,9 @@ legal-version acceptances.
   `GET|POST /v1/organizations/{id}/verification-submissions`: evidence and history.
 - `GET /v1/verifications`, `GET /v1/verifications/{id}`, and
   `POST /v1/verifications/{id}/decision`: administrator queue, captured identity
-  snapshot and review decisions (`under_review`, `approved`, `rejected`). A changed
-  identity snapshot cannot be approved using stale evidence.
+  snapshot and review decisions (`under_review`, `approved`, `rejected`). The queue
+  filters by `status` and lists every submission without it. A changed identity
+  snapshot cannot be approved using stale evidence.
 
 ## Animals and applications
 

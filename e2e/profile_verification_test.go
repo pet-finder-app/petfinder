@@ -27,6 +27,19 @@ func TestProfileAndVerification(t *testing.T) {
 	stranger.do("POST", "/v1/verifications/"+v.ID+"/decision", map[string]any{"decision": "approved", "reason": "Identity checked"}, 403, nil)
 	admin.do("POST", "/v1/verifications/"+v.ID+"/decision", map[string]any{"decision": "under_review", "reason": "Checking documents"}, 200, nil)
 	admin.do("POST", "/v1/verifications/"+v.ID+"/decision", map[string]any{"decision": "approved", "reason": "Identity checked"}, 200, nil)
+	var queue struct {
+		Page struct{ Total int } `json:"page"`
+	}
+	admin.do("GET", "/v1/verifications", nil, 200, &queue)
+	all := queue.Page.Total
+	byStatus := 0
+	for _, status := range []string{"submitted", "under_review", "approved", "rejected"} {
+		admin.do("GET", "/v1/verifications?status="+status, nil, 200, &queue)
+		byStatus += queue.Page.Total
+	}
+	if all == 0 || all != byStatus {
+		t.Fatalf("unfiltered queue lists %d submissions, statuses add up to %d", all, byStatus)
+	}
 	u.do("GET", "/v1/me", nil, 200, &result)
 	if result.VerificationStatus != "verified" {
 		t.Fatal("verification did not update profile")
